@@ -28,6 +28,8 @@ if [[ "$TARGET" == "local" ]]; then
     echo "      (otherwise these checks would silently test a stale server)" >&2
     exit 1
   fi
+  echo "==> applying D1 migrations (local)"
+  npx wrangler d1 migrations apply nostrbook --local >/dev/null
   echo "==> starting wrangler dev on :8787"
   # ENVIRONMENT=development enables the dev-only X-Forwarded-Host override the
   # checks below rely on (wrangler.jsonc ships production; --var also covers
@@ -103,6 +105,10 @@ if [[ "$TARGET" == "local" ]]; then
   check "spoofed host class is 404" 404 "$MAIN_HOST.evil.com" "/"
   check "deep subdomain is 404" 404 "a.b.$MAIN_HOST" "/"
 fi
+
+# --- P3: ingestion + public blogs ----------------------------------------------
+# A shape-valid npub with a bad checksum must 404 (no relay fetch happens).
+check "malformed npub is 404" 404 "$MAIN_HOST" "/npub1$(printf 'z%.0s' $(seq 1 58))"
 
 echo
 echo "smoke: $PASS passed, $FAIL failed"

@@ -1,5 +1,4 @@
 import { BlogLayout, type BlogProfile } from "./layout";
-import type { User } from "../../services/users";
 import type { NostrEvent } from "../../nostr/event";
 import { postMeta, isoDate } from "../../markdown/nip23";
 
@@ -9,14 +8,15 @@ import { postMeta, isoDate } from "../../markdown/nip23";
  * text and attribute contexts.
  */
 export function BlogHome(props: {
-  user: User;
+  handle: string;
   profile: BlogProfile | null;
   posts: NostrEvent[];
   themeCss?: string;
   mainHost: string;
+  basePath?: string;
 }) {
-  const handle = props.user.handle ?? "";
-  const name = props.profile?.name?.trim() || `@${handle}`;
+  const base = props.basePath ?? "";
+  const name = props.profile?.name?.trim() || `@${props.handle}`;
   // Drop d-tagless posts (slug ""): they have no addressable URL — the link
   // would be href="/" and just point back at this page. Feeds and the
   // sitemap filter the same way (views/tenant/xml.ts).
@@ -25,10 +25,11 @@ export function BlogHome(props: {
   return (
     <BlogLayout
       title={`${name} — Nostrbook`}
-      handle={handle}
+      handle={props.handle}
       mainHost={props.mainHost}
       profile={props.profile}
       themeCss={props.themeCss ?? ""}
+      basePath={base}
     >
       <main class="blog-main">
         {metas.length === 0 ? (
@@ -39,7 +40,10 @@ export function BlogHome(props: {
               const date = isoDate(m.published_at);
               return (
                 <li class="post-item">
-                  <a class="post-link" href={`/${encodeURIComponent(m.slug)}`}>
+                  <a
+                    class="post-link"
+                    href={`${base}/${encodeURIComponent(m.slug)}`}
+                  >
                     {m.title}
                   </a>{" "}
                   <time class="post-date" datetime={date}>

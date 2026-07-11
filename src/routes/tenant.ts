@@ -4,42 +4,72 @@ import type { DispatchEnv } from "../types";
 import type { NostrEvent } from "../nostr/event";
 import type { User } from "../services/users";
 import type { BlogProfile } from "../views/tenant/layout";
+import {
+  getPost as getPostRow,
+  listPostsByPubkey,
+  rowToEvent,
+} from "../services/events";
+import { getProfile as getProfileRow } from "../services/profiles";
 import { BlogHome } from "../views/tenant/home";
 import { PostPage } from "../views/tenant/post";
 import { NotFoundPage } from "../views/tenant/not-found";
 import { rssFeed, atomFeed, sitemapXml } from "../views/tenant/xml";
 
 /**
- * Blog subdomain routes (<handle>.MAIN_HOST). P2 scope: RENDER ONLY.
+ * Blog subdomain routes (<handle>.MAIN_HOST).
  *
- * Post/profile data is pulled through a thin injectable provider so P3 can
- * swap in the D1-backed implementation (services/events + services/profiles)
- * without touching the render path. Tests inject fixture-backed providers.
+ * Post/profile data is pulled through a thin injectable provider; the
+ * default is the D1-backed implementation (services/events +
+ * services/profiles) wired in P3. Tests may still inject fixture-backed
+ * providers via setTenantDataProvider.
  */
+
+/** A post ready to render: the event (for tag metadata) + stored HTML body. */
+export type TenantPost = { event: NostrEvent; html: string };
 
 export type TenantDataProvider = {
   /** Owner profile (kind 0 → name/picture/about) or null. */
   getProfile(env: Env, pubkey: string): Promise<BlogProfile | null>;
   /** Kind 30023 posts for the owner, newest first, deleted excluded. */
   listPosts(env: Env, pubkey: string): Promise<NostrEvent[]>;
-  /** Single kind 30023 post by d-tag slug, or null. */
-  getPost(env: Env, pubkey: string, slug: string): Promise<NostrEvent | null>;
+  /** Single kind 30023 post by d-tag slug (with ingest-rendered HTML), or null. */
+  getPost(env: Env, pubkey: string, slug: string): Promise<TenantPost | null>;
 };
-
-const emptyProvider: TenantDataProvider = {
-  getProfile: async () => null,
-  listPosts: async () => [],
-  getPost: async () => null,
-};
-
-let provider: TenantDataProvider = emptyProvider;
 
 /**
- * Install the data provider (P3: D1-backed; tests: fixtures).
- * Passing null resets to the empty provider.
+ * D1-backed default provider. getPost serves events.rendered — the HTML
+ * produced by renderPost at MIRROR time (render-at-ingest contract). A row
+ * with a NULL rendered column cannot come from mirrorEvent (which always
+ * renders kind 30023); if one ever appears (manual insert, migration gap),
+ * it is treated as NOT FOUND rather than rendered per request — the P2→P3
+ * addendum forbids renderPost on the request path (up to ~150ms CPU on
+ * hostile 32 KiB input vs the free-tier 10ms budget).
+ */
+const d1Provider: TenantDataProvider = {
+  async getProfile(env, pubkey) {
+    const row = await getProfileRow(env, pubkey);
+    if (!row) return null;
+    return { name: row.name, picture: row.picture, about: row.about };
+  },
+  async listPosts(env, pubkey) {
+    const rows = await listPostsByPubkey(env, pubkey);
+    return rows.map(rowToEvent);
+  },
+  async getPost(env, pubkey, slug) {
+    const row = await getPostRow(env, pubkey, slug);
+    if (!row || row.rendered === null) return null;
+    return { event: rowToEvent(row), html: row.rendered };
+  },
+};
+
+let provider: TenantDataProvider = d1Provider;
+
+/**
+ * TEST SEAM: install a fixture-backed data provider. Passing null restores
+ * the D1-backed default.
  */
 export function setTenantDataProvider(next: TenantDataProvider | null): void {
-  provider = next ?? emptyProvider;
+  provider = next ?? d1Provider;
 }
 
 /** Per-request blog context derived from the resolved Site. */
@@ -104,7 +134,7 @@ tenantRoutes.get("/", async (c) => {
   ]);
   return c.html(
     BlogHome({
-      user: ctx.user,
+      handle: ctx.handle,
       profile,
       posts,
       themeCss: ctx.themeCss,
@@ -173,16 +203,21 @@ tenantRoutes.get("/:slug", async (c) => {
   const ctx = blogCtx(c);
   if (!ctx) return notFound(c);
   const slug = c.req.param("slug");
-  const ev = await provider.getPost(c.env, ctx.pubkey, slug);
-  if (!ev || ev.kind !== 30023 || ev.pubkey !== ctx.pubkey) {
+  const post = await provider.getPost(c.env, ctx.pubkey, slug);
+  if (
+    !post ||
+    post.event.kind !== 30023 ||
+    post.event.pubkey !== ctx.pubkey
+  ) {
     return notFound(c);
   }
   const profile = await provider.getProfile(c.env, ctx.pubkey);
   return c.html(
     PostPage({
-      user: ctx.user,
+      handle: ctx.handle,
       profile,
-      event: ev,
+      event: post.event,
+      bodyHtml: post.html,
       themeCss: ctx.themeCss,
       mainHost: ctx.mainHost,
     }),

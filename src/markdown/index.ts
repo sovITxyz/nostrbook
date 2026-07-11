@@ -152,11 +152,24 @@ md.core.ruler.push("nostrbook_heading_ids", headingIds);
  */
 export const MAX_MARKDOWN_LENGTH = 32_768;
 
+let renderPostCalls = 0;
+
+/**
+ * TEST INSTRUMENTATION: total renderPost invocations in this isolate.
+ * The render-at-ingest contract (P2→P3 addendum) requires the post route to
+ * serve stored HTML with ZERO renderPost calls on the request path; tests
+ * assert that via deltas of this counter. Negligible production cost.
+ */
+export function getRenderPostCallCount(): number {
+  return renderPostCalls;
+}
+
 /**
  * Render NIP-23 markdown to safe HTML.
  * markdown-it (html:false) → sanitize.ts allowlist pass.
  */
 export function renderPost(src: string): string {
+  renderPostCalls++;
   const input =
     typeof src === "string" ? src.slice(0, MAX_MARKDOWN_LENGTH) : "";
   return sanitizeHtml(md.render(input));

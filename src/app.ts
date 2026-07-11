@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv, DispatchEnv, Site } from "./types";
 import { guard } from "./middleware/guard";
 import { tenant } from "./middleware/tenant";
+import { cache } from "./middleware/cache";
 import { mainRoutes } from "./routes/main";
 import { tenantRoutes } from "./routes/tenant";
 import { apiRoutes } from "./routes/api";
@@ -36,6 +37,8 @@ mainApp.route("/.well-known", wellknownRoutes);
 
 // --- Blog site (subdomains) --------------------------------------------------
 const blogApp = siteFromEnv(new Hono<DispatchEnv>());
+// Edge cache for public tenant GETs (after site injection, before routes).
+blogApp.use("*", cache);
 blogApp.route("/", tenantRoutes);
 
 // --- Outer app ----------------------------------------------------------------

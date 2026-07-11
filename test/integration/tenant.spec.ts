@@ -9,6 +9,7 @@ import {
   setTenantDataProvider,
   type TenantDataProvider,
 } from "../../src/routes/tenant";
+import { renderPost } from "../../src/markdown";
 import type { NostrEvent } from "../../src/nostr/event";
 
 const posts: NostrEvent[] = [
@@ -37,12 +38,16 @@ const fixtureProvider: TenantDataProvider = {
       : null,
   listPosts: async (_env, pubkey) =>
     pubkey === ALICE_PK ? posts : [],
-  getPost: async (_env, pubkey, slug) =>
-    posts.find(
+  getPost: async (_env, pubkey, slug) => {
+    const event = posts.find(
       (p) =>
         p.pubkey === pubkey &&
         p.tags.some((t) => t[0] === "d" && t[1] === slug),
-    ) ?? null,
+    );
+    // The provider contract ships pre-rendered HTML (render-at-ingest);
+    // this fixture provider renders at lookup time instead.
+    return event ? { event, html: renderPost(event.content) } : null;
+  },
 };
 
 // Hostile per-blog theme CSS stored in users.settings — must come out declawed.

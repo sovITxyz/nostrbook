@@ -1,33 +1,35 @@
 import { BlogLayout, type BlogProfile } from "./layout";
-import type { User } from "../../services/users";
 import type { NostrEvent } from "../../nostr/event";
-import { renderPost } from "../../markdown";
 import { postMeta, isoDate } from "../../markdown/nip23";
 
 /**
  * Post page: title, published_at, rendered content.
- * The body HTML comes from renderPost (markdown-it html:false + allowlist
- * sanitizer) — the ONLY dangerouslySetInnerHTML sink for event content.
+ *
+ * `bodyHtml` is the renderPost output (markdown-it html:false + allowlist
+ * sanitizer) that mirrorEvent stored at INGEST time (events.rendered) — the
+ * ONLY dangerouslySetInnerHTML sink for event content. This view never calls
+ * renderPost itself (render-at-ingest contract, P2→P3 addendum).
  */
 export function PostPage(props: {
-  user: User;
+  handle: string;
   profile: BlogProfile | null;
   event: NostrEvent;
+  bodyHtml: string;
   themeCss?: string;
   mainHost: string;
+  basePath?: string;
 }) {
-  const handle = props.user.handle ?? "";
   const meta = postMeta(props.event);
   const date = isoDate(meta.published_at);
-  const body = renderPost(props.event.content);
 
   return (
     <BlogLayout
-      title={`${meta.title} — @${handle}`}
-      handle={handle}
+      title={`${meta.title} — @${props.handle}`}
+      handle={props.handle}
       mainHost={props.mainHost}
       profile={props.profile}
       themeCss={props.themeCss ?? ""}
+      basePath={props.basePath ?? ""}
     >
       <main class="blog-main">
         <article class="post">
@@ -41,7 +43,7 @@ export function PostPage(props: {
           </header>
           <div
             class="post-content"
-            dangerouslySetInnerHTML={{ __html: body }}
+            dangerouslySetInnerHTML={{ __html: props.bodyHtml }}
           />
         </article>
       </main>

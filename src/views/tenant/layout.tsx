@@ -17,6 +17,9 @@ export type BlogProfile = {
  * Base layout for blog (tenant) pages: profile header + sanitized per-blog
  * theme CSS. `themeCss` is sanitized HERE (last gate before the <style> tag)
  * regardless of what callers pass.
+ *
+ * `basePath` prefixes all blog-internal links ("" on subdomains; "/npub1…"
+ * when the same views render an unclaimed blog under the apex).
  */
 export function BlogLayout(props: {
   title: string;
@@ -24,8 +27,10 @@ export function BlogLayout(props: {
   mainHost: string;
   profile: BlogProfile | null;
   themeCss?: string;
+  basePath?: string;
   children?: Child;
 }) {
+  const base = props.basePath ?? "";
   const css = sanitizeCss(props.themeCss ?? "");
   const name = props.profile?.name?.trim() || `@${props.handle}`;
   const picture = safeHttpUrl(props.profile?.picture);
@@ -42,13 +47,13 @@ export function BlogLayout(props: {
           rel="alternate"
           type="application/rss+xml"
           title={`${name} (RSS)`}
-          href="/rss.xml"
+          href={`${base}/rss.xml`}
         />
         <link
           rel="alternate"
           type="application/atom+xml"
           title={`${name} (Atom)`}
-          href="/atom.xml"
+          href={`${base}/atom.xml`}
         />
         {css ? <style dangerouslySetInnerHTML={{ __html: css }} /> : null}
       </head>
@@ -64,7 +69,7 @@ export function BlogLayout(props: {
             />
           ) : null}
           <p class="blog-name">
-            <a href="/">{name}</a>
+            <a href={`${base}/`}>{name}</a>
           </p>
           <p class="blog-handle">@{props.handle}</p>
           {about ? <p class="blog-about">{about}</p> : null}

@@ -23,6 +23,22 @@ export async function seedBlockedMallory(): Promise<void> {
     .run();
 }
 
+/**
+ * Wipe all mirror state (events, posts_fts, profiles, gen counters).
+ * Storage persists across `it` blocks within a test file, so specs that
+ * assert exact counts/generations reset explicitly in beforeEach.
+ */
+export async function resetMirrorState(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM posts_fts"),
+    env.DB.prepare("DELETE FROM events"),
+    env.DB.prepare("DELETE FROM profiles"),
+  ]);
+  await Promise.all(
+    [ALICE_PK, BOB_PK, MALLORY_PK].map((pk) => env.KV.delete(`gen:${pk}`)),
+  );
+}
+
 /** All real tags (`<...>`) in an HTML string. Escaped text can't contain `<`. */
 export function extractTags(html: string): string[] {
   return html.match(/<[a-zA-Z/!][^>]*>?/g) ?? [];

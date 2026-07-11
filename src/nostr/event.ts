@@ -111,6 +111,23 @@ export async function verifyEvent(ev: NostrEvent): Promise<boolean> {
   }
 }
 
+/**
+ * Plain 7-field copy of an event. Relay-delivered events may carry
+ * non-standard extra fields (isNostrEvent tolerates them); persistence paths
+ * use this to store a canonical JSON form only.
+ */
+export function pickEventFields(ev: NostrEvent): NostrEvent {
+  return {
+    id: ev.id,
+    pubkey: ev.pubkey,
+    kind: ev.kind,
+    created_at: ev.created_at,
+    tags: ev.tags,
+    content: ev.content,
+    sig: ev.sig,
+  };
+}
+
 /** First `d` tag value of an event, or `""` if absent (NIP-33 semantics). */
 export function getDTag(ev: NostrEvent): string {
   for (const tag of ev.tags) {

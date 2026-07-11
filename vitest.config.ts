@@ -15,6 +15,9 @@ export default defineConfig(async () => {
         // main worker + bindings come from wrangler.jsonc
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
+          // TEST ONLY (not in wrangler.jsonc): lets integration tests invoke
+          // the cron entry point via SELF.scheduled().
+          compatibilityFlags: ["service_binding_extra_handlers"],
           bindings: {
             TEST_MIGRATIONS: migrations,
             // wrangler.jsonc ships ENVIRONMENT=production (fail closed);
