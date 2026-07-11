@@ -38,7 +38,10 @@ wrangler secret put TURNSTILE_SECRET_KEY
 - [ ] Create a Turnstile widget (dashboard → Turnstile) for `nostrbook.net`;
       put the site key in `wrangler.jsonc` `vars.TURNSTILE_SITE_KEY` and the
       secret via `wrangler secret put`.
-- [ ] Set `vars.ENVIRONMENT` to `"production"` for the deployed config.
+- `vars.ENVIRONMENT` is already `"production"` in the committed
+  `wrangler.jsonc` (fail closed — deploys never enable the dev-only
+  X-Forwarded-Host override). Local dev gets `ENVIRONMENT=development` from
+  `.dev.vars` (copy `.dev.vars.example`); do not flip the committed var.
 
 ## 4. Routes + cron (deployed from wrangler.jsonc)
 

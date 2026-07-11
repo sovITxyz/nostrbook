@@ -1,6 +1,9 @@
 node_modules/
 .wrangler/
-.dev.vars
+# Ignore all .dev.vars variants (incl. wrangler per-env files like
+# .dev.vars.production) but keep the committed example.
+.dev.vars*
+!.dev.vars.example
 dist/
 *.log
 .DS_Store

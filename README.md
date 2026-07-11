@@ -33,5 +33,7 @@ Phase-by-phase build plan: see [docs/phases/](docs/phases/).
 
 ## License
 
+Copyright (C) 2026 sovITxyz <git@sovit.xyz>
+
 [AGPL-3.0-only](LICENSE). If you run a modified Nostrbook as a service, you
 must offer its source to your users.

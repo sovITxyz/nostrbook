@@ -10,8 +10,11 @@ TARGET="${1:-local}"
 DEV_PID=""
 
 cleanup() {
-  if [[ -n "$DEV_PID" ]] && kill -0 "$DEV_PID" 2>/dev/null; then
-    kill "$DEV_PID" 2>/dev/null || true
+  if [[ -n "$DEV_PID" ]]; then
+    # wrangler dev is a process tree (npx → node → workerd); kill the whole
+    # process group (setsid below makes DEV_PID its leader) or workerd
+    # survives and squats on :8787 for the next run.
+    kill -- "-$DEV_PID" 2>/dev/null || kill "$DEV_PID" 2>/dev/null || true
     wait "$DEV_PID" 2>/dev/null || true
   fi
 }
@@ -20,8 +23,17 @@ trap cleanup EXIT
 if [[ "$TARGET" == "local" ]]; then
   BASE="http://127.0.0.1:8787"
   MAIN_HOST="nostrbook.net"
+  if curl -sf -o /dev/null --max-time 2 "$BASE/healthz" 2>/dev/null; then
+    echo "FAIL: something is already listening on :8787 — kill it first" >&2
+    echo "      (otherwise these checks would silently test a stale server)" >&2
+    exit 1
+  fi
   echo "==> starting wrangler dev on :8787"
-  npx wrangler dev --port 8787 --inspector-port 0 >/dev/null 2>&1 &
+  # ENVIRONMENT=development enables the dev-only X-Forwarded-Host override the
+  # checks below rely on (wrangler.jsonc ships production; --var also covers
+  # fresh clones without a .dev.vars file).
+  setsid npx wrangler dev --port 8787 --inspector-port 0 \
+    --var ENVIRONMENT:development >/dev/null 2>&1 &
   DEV_PID=$!
   for i in $(seq 1 60); do
     if curl -sf -o /dev/null "$BASE/healthz"; then break; fi

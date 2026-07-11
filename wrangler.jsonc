@@ -28,7 +28,12 @@
   ],
   "vars": {
     "MAIN_HOST": "nostrbook.net",
-    "ENVIRONMENT": "development",
+    // Fail closed: the committed config is production-safe. Local dev gets
+    // ENVIRONMENT=development via .dev.vars (wrangler dev) and the miniflare
+    // bindings override in vitest.config.ts (tests/CI). Never set this to
+    // "development" here — it enables the client-spoofable X-Forwarded-Host
+    // override in src/middleware/guard.ts.
+    "ENVIRONMENT": "production",
     // Cloudflare Turnstile "always passes" visible test site key; replace with the
     // real site key at deploy time (docs/setup.md).
     "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",

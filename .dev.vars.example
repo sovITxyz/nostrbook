@@ -1,4 +1,9 @@
 # Copy to .dev.vars for local development (never commit .dev.vars).
+# ENVIRONMENT=development enables the dev-only X-Forwarded-Host override in
+# src/middleware/guard.ts (wrangler dev rewrites the Host header, making
+# subdomains untestable otherwise). The committed wrangler.jsonc ships
+# ENVIRONMENT=production, so deploys fail closed.
+ENVIRONMENT="development"
 # Turnstile "always passes" test secret key — replace with the real secret in prod
 # via `wrangler secret put TURNSTILE_SECRET_KEY`.
 TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA"

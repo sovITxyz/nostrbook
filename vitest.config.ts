@@ -15,7 +15,13 @@ export default defineConfig(async () => {
         // main worker + bindings come from wrangler.jsonc
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations },
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            // wrangler.jsonc ships ENVIRONMENT=production (fail closed);
+            // tests exercise the dev-only X-Forwarded-Host affordance, and
+            // CI has no .dev.vars, so override it here.
+            ENVIRONMENT: "development",
+          },
         },
       }),
     ],
