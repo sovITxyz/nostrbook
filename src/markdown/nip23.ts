@@ -67,14 +67,23 @@ export function postMeta(ev: NostrEvent): PostMeta {
   return { slug, title, summary, published_at, image };
 }
 
-/** YYYY-MM-DD for a unix-seconds timestamp ("" when unrepresentable). */
+// Unrepresentable timestamps fall back to the unix epoch rather than "":
+// callers interpolate these straight into Atom <updated> / sitemap
+// <lastmod> / <time datetime>, where an empty value is well-formed XML but
+// violates the RFC 3339 / W3C datetime requirement and can make feed
+// consumers reject the document. Mirrors rfc822()'s epoch fallback in
+// views/tenant/xml.ts.
+
+/** YYYY-MM-DD for a unix-seconds timestamp (unix epoch when unrepresentable). */
 export function isoDate(seconds: number): string {
   const d = new Date(seconds * 1000);
-  return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
+  const safe = Number.isFinite(d.getTime()) ? d : new Date(0);
+  return safe.toISOString().slice(0, 10);
 }
 
-/** Full ISO 8601 datetime for a unix-seconds timestamp ("" when unrepresentable). */
+/** Full ISO 8601 datetime for a unix-seconds timestamp (unix epoch when unrepresentable). */
 export function isoDateTime(seconds: number): string {
   const d = new Date(seconds * 1000);
-  return Number.isFinite(d.getTime()) ? d.toISOString() : "";
+  const safe = Number.isFinite(d.getTime()) ? d : new Date(0);
+  return safe.toISOString();
 }

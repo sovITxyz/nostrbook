@@ -208,6 +208,44 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
     });
   });
 
+  describe("d-tagless posts (empty slug → non-addressable)", () => {
+    it("are omitted from the home list, feeds and sitemap", async () => {
+      // NIP-23 allows one d-tagless replaceable event per author; its URL
+      // would collapse onto the blog home, so render paths must skip it.
+      const ghost: NostrEvent = {
+        ...(fixtures.posts.aliceHello as NostrEvent),
+        tags: [["title", "Ghost post without a d tag"]],
+      };
+      setTenantDataProvider({
+        ...fixtureProvider,
+        listPosts: async (_env, pubkey) =>
+          pubkey === ALICE_PK ? [...posts, ghost] : [],
+      });
+      try {
+        const home = await (
+          await SELF.fetch("https://alice.nostrbook.net/")
+        ).text();
+        expect(home).not.toContain("Ghost post");
+        expect(home).toContain("Hello world"); // real posts still listed
+
+        const rss = await (
+          await SELF.fetch("https://alice.nostrbook.net/rss.xml")
+        ).text();
+        expect(rss).not.toContain("Ghost post");
+
+        const sitemap = await (
+          await SELF.fetch("https://alice.nostrbook.net/sitemap.xml")
+        ).text();
+        const homeLocs = sitemap.match(
+          /<loc>https:\/\/alice\.nostrbook\.net\/<\/loc>/g,
+        );
+        expect(homeLocs?.length ?? 0).toBe(1); // home emitted exactly once
+      } finally {
+        setTenantDataProvider(fixtureProvider);
+      }
+    });
+  });
+
   describe("empty blog (no provider data)", () => {
     it("still renders home, feeds and sitemap for a user with no posts", async () => {
       // bob is claimed but the provider has no data for him

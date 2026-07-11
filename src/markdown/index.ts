@@ -85,9 +85,17 @@ function slugify(text: string): string {
     .slice(0, 64);
 }
 
-/** Core rule: add slugified, per-render-deduped ids to headings. */
+/**
+ * Core rule: add slugified, per-render-deduped ids to headings.
+ *
+ * Dedup keeps a per-base next-suffix map alongside the used-set so each
+ * collision scan resumes where the previous one stopped — amortized O(1)
+ * per heading. A single restarting counter would be O(n²) across n
+ * identical headings, which a crafted post could turn into a CPU burn.
+ */
 function headingIds(state: StateCore): void {
   const used = new Set<string>();
+  const nextSuffix = new Map<string, number>();
   const tokens = state.tokens;
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -100,8 +108,9 @@ function headingIds(state: StateCore): void {
       .join("");
     const base = slugify(text) || "section";
     let slug = base;
-    let n = 1;
+    let n = nextSuffix.get(base) ?? 1;
     while (used.has(slug)) slug = `${base}-${n++}`;
+    nextSuffix.set(base, n);
     used.add(slug);
     token.attrSet("id", slug);
   }
@@ -129,11 +138,19 @@ md.linkify.add("//", null);
 md.core.ruler.push("nostrbook_heading_ids", headingIds);
 
 /**
- * Cap on rendered markdown input, matching the event content cap
- * (src/nostr/event.ts MAX_CONTENT_LENGTH). Anything larger is truncated
- * before parsing so hostile blobs cannot burn unbounded CPU.
+ * Cap on rendered markdown input. Anything larger is truncated before
+ * parsing.
+ *
+ * Deliberately well BELOW the 256 KiB event content cap
+ * (src/nostr/event.ts MAX_CONTENT_LENGTH): markdown-it is superlinear with
+ * a large constant on hostile input ("![".repeat(n), "[".repeat(n),
+ * "*a".repeat(n)), and renderPost runs synchronously on the post-page
+ * request path. At 256 KiB a crafted post costs ~1s of CPU per render; at
+ * 32 KiB the worst measured hostile input stays around ~150ms and legit
+ * long-form posts (~5-8k words) still fit. Response caching (P3+) further
+ * amortizes this; the cap is the render-path backstop.
  */
-export const MAX_MARKDOWN_LENGTH = 262_144;
+export const MAX_MARKDOWN_LENGTH = 32_768;
 
 /**
  * Render NIP-23 markdown to safe HTML.

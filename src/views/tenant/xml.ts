@@ -47,6 +47,17 @@ function postUrl(baseUrl: string, meta: PostMeta): string {
   return `${baseUrl}/${encodeURIComponent(meta.slug)}`;
 }
 
+/**
+ * Map events to metas, dropping posts with an empty `d` tag. NIP-23 allows
+ * one d-tagless replaceable event per author (d_tag defaults to ""), but
+ * such a post has no addressable URL here: `${baseUrl}/` + encoded "" is
+ * the blog home, so listing it would emit links/locs that collapse onto
+ * the home URL (duplicate sitemap <loc>, feed items pointing at "/").
+ */
+function addressableMetas(posts: NostrEvent[]): PostMeta[] {
+  return posts.map(postMeta).filter((m) => m.slug !== "");
+}
+
 function newestPublished(metas: PostMeta[]): number {
   let newest = 0;
   for (const m of metas) if (m.published_at > newest) newest = m.published_at;
@@ -55,7 +66,7 @@ function newestPublished(metas: PostMeta[]): number {
 
 /** RSS 2.0 feed. */
 export function rssFeed(opts: FeedOpts): string {
-  const metas = opts.posts.map(postMeta);
+  const metas = addressableMetas(opts.posts);
   const items = metas
     .map((m) => {
       const url = xmlEscape(postUrl(opts.baseUrl, m));
@@ -96,7 +107,7 @@ export function rssFeed(opts: FeedOpts): string {
 
 /** Atom feed. */
 export function atomFeed(opts: FeedOpts): string {
-  const metas = opts.posts.map(postMeta);
+  const metas = addressableMetas(opts.posts);
   const updated = isoDateTime(
     metas.length > 0 ? newestPublished(metas) : 0,
   );
@@ -140,8 +151,7 @@ export function sitemapXml(opts: {
   posts: NostrEvent[];
 }): string {
   const urls = [`<url><loc>${xmlEscape(opts.baseUrl)}/</loc></url>`];
-  for (const ev of opts.posts) {
-    const m = postMeta(ev);
+  for (const m of addressableMetas(opts.posts)) {
     urls.push(
       `<url>` +
         `<loc>${xmlEscape(postUrl(opts.baseUrl, m))}</loc>` +

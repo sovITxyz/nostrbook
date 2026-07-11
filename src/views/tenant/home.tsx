@@ -17,7 +17,10 @@ export function BlogHome(props: {
 }) {
   const handle = props.user.handle ?? "";
   const name = props.profile?.name?.trim() || `@${handle}`;
-  const metas = props.posts.map(postMeta);
+  // Drop d-tagless posts (slug ""): they have no addressable URL — the link
+  // would be href="/" and just point back at this page. Feeds and the
+  // sitemap filter the same way (views/tenant/xml.ts).
+  const metas = props.posts.map(postMeta).filter((m) => m.slug !== "");
 
   return (
     <BlogLayout

@@ -127,6 +127,14 @@ describe("tag and date helpers", () => {
   it("isoDate / isoDateTime format unix seconds", () => {
     expect(isoDate(1700000100)).toBe("2023-11-14");
     expect(isoDateTime(1700000100)).toBe("2023-11-14T22:15:00.000Z");
-    expect(isoDate(Number.MAX_SAFE_INTEGER)).toBe("");
+  });
+
+  it("isoDate / isoDateTime fall back to the epoch for unrepresentable timestamps", () => {
+    // Feed/sitemap consumers require a valid RFC 3339 / W3C datetime, so an
+    // out-of-range Date must yield the epoch sentinel, never "".
+    expect(isoDate(Number.MAX_SAFE_INTEGER)).toBe("1970-01-01");
+    expect(isoDateTime(Number.MAX_SAFE_INTEGER)).toBe(
+      "1970-01-01T00:00:00.000Z",
+    );
   });
 });

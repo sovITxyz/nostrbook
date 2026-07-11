@@ -99,4 +99,32 @@ describe("sanitizeCss", () => {
     expect(sanitizeCss(null as unknown as string)).toBe("");
     expect(sanitizeCss(undefined as unknown as string)).toBe("");
   });
+
+  it("resolves shallow nested reassembly within the pass cap", () => {
+    // Depth 3: each fixpoint pass peels one layer; converges well inside
+    // the cap and keeps the surrounding legit CSS.
+    let bomb = "@import";
+    for (let i = 0; i < 2; i++) bomb = `@impor${bomb}t`;
+    const out = sanitizeCss(`body{color:red} ${bomb}`);
+    expect(out).not.toMatch(/@import/i);
+    expect(out).toContain("body{color:red}");
+  });
+
+  it("fails closed (empty output) on a crafted fixpoint depth bomb, quickly", async () => {
+    // Each nesting level needs one full-string pass to peel; without the
+    // iteration cap a 20KB bomb costs O(depth) passes (~80ms per render).
+    // workerd only advances clocks at I/O boundaries — flush a macrotask
+    // around the burn so performance.now() reflects wall time.
+    const ioNow = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return performance.now();
+    };
+    let bomb = "@import";
+    while (bomb.length + 7 <= MAX_THEME_CSS_LENGTH) bomb = `@impor${bomb}t`;
+    const start = await ioNow();
+    const out = sanitizeCss(bomb);
+    const elapsed = (await ioNow()) - start;
+    expect(out).toBe("");
+    expect(elapsed).toBeLessThan(50);
+  });
 });

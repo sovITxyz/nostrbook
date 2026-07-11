@@ -11,7 +11,8 @@
  *     `javascript:` removed;
  *   - obfuscation → backslash escapes removed first (`\75rl(` → `url(`),
  *     comments stripped (replaced by a space so they cannot join tokens),
- *     removals looped to a fixpoint (`@@importimport` cannot reassemble);
+ *     removals looped to a fixpoint (`@@importimport` cannot reassemble),
+ *     with a pass cap that fails closed on crafted depth bombs;
  *   - control characters stripped (tab/newline kept for readability);
  *   - length capped BEFORE any other step.
  */
@@ -35,6 +36,17 @@ const DANGEROUS_PATTERNS: RegExp[] = [
   /behavior\s*:/gi,
   /javascript\s*:/gi,
 ];
+
+/**
+ * Fixpoint iteration cap. Every changing pass strictly shrinks the string,
+ * so without a cap an adversarially nested 20KB theme ("@impor…@import…t"
+ * repeated) forces O(depth) full-string passes — ~80ms of CPU per page
+ * render (the layout re-sanitizes on every request). Real CSS converges in
+ * 1 pass and fixture-grade reassembly tricks in 2-3; anything still
+ * changing after this many passes is a crafted depth bomb and is dropped
+ * wholesale (fail closed — never emit a partially sanitized string).
+ */
+const MAX_SANITIZE_PASSES = 10;
 
 /**
  * Returns theme CSS that is safe to inline inside a `<style>` element.
@@ -61,14 +73,21 @@ export function sanitizeCss(css: string): string {
   s = s.replace(/</g, "");
 
   // 6. Remove dangerous constructs, looping to a fixpoint so removals can
-  //    never splice a new dangerous token together.
-  let prev: string;
-  do {
-    prev = s;
+  //    never splice a new dangerous token together. Iterations are capped
+  //    (see MAX_SANITIZE_PASSES); input that has not converged by then is
+  //    a crafted depth bomb and is rejected outright.
+  let converged = false;
+  for (let pass = 0; pass < MAX_SANITIZE_PASSES; pass++) {
+    const prev = s;
     for (const re of DANGEROUS_PATTERNS) {
       s = s.replace(re, "");
     }
-  } while (s !== prev);
+    if (s === prev) {
+      converged = true;
+      break;
+    }
+  }
+  if (!converged) return "";
 
   return s.trim();
 }

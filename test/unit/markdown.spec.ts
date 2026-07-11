@@ -167,4 +167,40 @@ describe("renderPost — CPU sanity", () => {
     const perRender = (end - start) / iterations;
     expect(perRender).toBeLessThan(50);
   });
+
+  // Adversarial inputs: these guard against super-linear render paths that a
+  // benign fixture never exercises. Bounds are loose enough for CI noise but
+  // far below what quadratic behavior produces at these sizes.
+
+  it("dedupes thousands of identical heading ids in amortized O(1)", async () => {
+    // 4000 identical headings took >500ms with the old restarting counter.
+    const input = "# h\n\n".repeat(4000);
+    renderPost("# h\n\n# h\n"); // warm-up
+    const start = await ioNow();
+    const html = renderPost(input);
+    const end = await ioNow();
+    // ~75ms measured with the amortized dedup (dominated by markdown-it
+    // block parsing, which is linear); >500ms with the old O(n²) counter.
+    expect(end - start).toBeLessThan(250);
+    expect(html).toContain('id="h"');
+    expect(html).toContain('id="h-3999"');
+  });
+
+  it("bounds hostile superlinear markdown-it input at the length cap", async () => {
+    // '![', '[' and '*a' floods are markdown-it's known superlinear inputs;
+    // MAX_MARKDOWN_LENGTH exists to keep them bounded. At the old 256KiB cap
+    // '![' cost ~1.2s per render.
+    const hostiles = [
+      "![".repeat(MAX_MARKDOWN_LENGTH), // truncated to the cap
+      "[".repeat(MAX_MARKDOWN_LENGTH),
+      "*a".repeat(MAX_MARKDOWN_LENGTH),
+    ];
+    for (const input of hostiles) {
+      const start = await ioNow();
+      const html = renderPost(input);
+      const end = await ioNow();
+      expect(typeof html).toBe("string");
+      expect(end - start).toBeLessThan(500);
+    }
+  });
 });
