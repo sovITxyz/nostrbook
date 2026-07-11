@@ -1,6 +1,6 @@
 /**
  * Fixed-window rate limiting backed by the D1 `rate_limits` table (NOT KV —
- * free-tier KV write budget is reserved for sessions/nonces/gen bumps).
+ * free-tier KV write budget is reserved for sessions/gen bumps).
  *
  * Implemented in P3 (was slated for P4): the unclaimed-npub on-demand mirror
  * needs an application-level abuse cap (global + per-IP) that the per-pubkey

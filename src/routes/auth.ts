@@ -16,17 +16,18 @@ import { LoginPage } from "../views/main/login";
 /**
  * NIP-07 / kind 22242 challenge-response login (apex only).
  *
- * Flow: GET /login/challenge issues a single-use nonce (KV, 5min TTL) →
- * the browser signs a kind 22242 event carrying ['challenge', nonce] and a
- * ['relay', wss://<host>] service-binding tag via window.nostr
- * (public/js/login.js) → POST /login verifies structure, kind, created_at
- * window, relay binding, nonce, and schnorr signature, then mints a session.
+ * Flow: GET /login/challenge issues a single-use nonce (D1 `login_nonces`,
+ * 5min expiry) → the browser signs a kind 22242 event carrying
+ * ['challenge', nonce] and a ['relay', wss://<host>] service-binding tag via
+ * window.nostr (public/js/login.js) → POST /login verifies structure, kind,
+ * created_at window, relay binding, nonce, and schnorr signature, then mints
+ * a session.
  */
 export const authRoutes = new Hono<DispatchEnv>();
 
 /** Login auth-event kind (NIP-42 ephemeral auth). */
 export const LOGIN_EVENT_KIND = 22242;
-/** Nonce lifetime in KV. */
+/** Nonce lifetime (D1 login_nonces.expires_at = issue time + this). */
 export const NONCE_TTL_SECONDS = 300; // 5 min
 /** Accepted |created_at - now| skew on the login event. */
 export const MAX_LOGIN_SKEW_SECONDS = 600; // ±10 min
@@ -34,17 +35,16 @@ export const MAX_LOGIN_SKEW_SECONDS = 600; // ±10 min
 const LOGIN_MAX = 10;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
 // Login itself only permits 10/15min/IP, so extra challenges buy an honest
-// client nothing — they only burn KV write budget (P4 review fix; was 30).
+// client nothing — they only burn write budget (P4 review fix; was 30).
 const CHALLENGE_MAX = 10;
 const CHALLENGE_WINDOW_SECONDS = 15 * 60;
 
-// Global daily challenge budget (P4 review fix). Every issued challenge is a
-// KV put (and each consumed nonce a KV delete); the free-tier KV budget is
-// 1,000 writes/day TOTAL, shared with sessions and cache gen bumps. Without
-// a global cap, a handful of IPs could legally exhaust it and break login +
-// cache invalidation platform-wide. 500 puts + up to 500 deletes = the whole
-// budget in the worst case, but nonce issuance stops BEFORE session writes
-// start failing. Same D1 rate_limits pattern as the P3 npub mirror budget.
+// Global daily challenge budget (P4 review fix, RETAINED after the ratified
+// nonce→D1 move). Originally this guarded the 1,000-writes/day free-tier KV
+// budget; nonces no longer touch KV at all, but the cap stays as a cheap
+// global bound on login_nonces table growth and D1 write burn (the 100k
+// writes/day D1 free-tier budget is shared with mirroring and rate
+// counters). Same D1 rate_limits pattern as the P3 npub mirror budget.
 export const CHALLENGE_GLOBAL_DAILY_CAP = 500;
 /** rate_limits key for the global challenge budget. Exported for tests. */
 export const CHALLENGE_GLOBAL_KEY = "challenge:global";
@@ -78,11 +78,6 @@ export function relayTagBindsHost(tag: string, env: Env): boolean {
   return env.ENVIRONMENT === "development" && DEV_LOOPBACK_HOSTS.has(hostname);
 }
 
-/** KV key for a login nonce. Exported for tests. */
-export function nonceKey(nonce: string): string {
-  return `nonce:${nonce}`;
-}
-
 function clientIp(c: Context<DispatchEnv>): string {
   return c.req.header("CF-Connecting-IP") ?? "unknown";
 }
@@ -107,7 +102,7 @@ authRoutes.get("/login/challenge", async (c) => {
   if (!allowed) {
     return c.json({ error: "rate limited, try again later" }, 429);
   }
-  // Global daily cap guards the shared KV write budget (see constant above).
+  // Global daily cap bounds nonce-table growth / D1 writes (see constant).
   const globalAllowed = await rateLimitAllows(
     c.env,
     CHALLENGE_GLOBAL_KEY,
@@ -120,9 +115,19 @@ authRoutes.get("/login/challenge", async (c) => {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const nonce = bytesToHex(bytes);
-  await c.env.KV.put(nonceKey(nonce), "1", {
-    expirationTtl: NONCE_TTL_SECONDS,
-  });
+  const nowSec = Math.floor(Date.now() / 1000);
+  // One D1 round trip: opportunistic sweep of expired nonces (best-effort
+  // cleanup that bounds table growth — rows are tiny and the expires_at
+  // index keeps it cheap; unconsumed nonces would otherwise sit forever,
+  // since D1 has no KV-style TTL) + the insert of the fresh nonce.
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM login_nonces WHERE expires_at < ?1").bind(
+      nowSec,
+    ),
+    c.env.DB.prepare(
+      "INSERT INTO login_nonces (nonce, expires_at) VALUES (?1, ?2)",
+    ).bind(nonce, nowSec + NONCE_TTL_SECONDS),
+  ]);
   return c.json(
     { challenge: nonce, ttl: NONCE_TTL_SECONDS },
     200,
@@ -167,31 +172,30 @@ authRoutes.post("/login", async (c) => {
   }
   // Service binding (P4 review fix): the signed event must name THIS host,
   // or it was produced for (or phished through) some other service' login
-  // flow — reject before touching KV. See relayTagBindsHost.
+  // flow — reject BEFORE the nonce lookup, so misbound events cannot burn
+  // nonces. See relayTagBindsHost.
   const relayTag = ev.tags.find((t) => t[0] === "relay")?.[1];
   if (relayTag === undefined || !relayTagBindsHost(relayTag, c.env)) {
     return c.json({ error: "missing or wrong relay binding tag" }, 401);
   }
 
-  const key = nonceKey(challenge);
-  const stored = await c.env.KV.get(key);
-  if (stored === null) {
+  // Single-use, ATOMIC (nonce→D1, orchestrator-RATIFIED; closes the P4
+  // review residual): the DELETE both checks and consumes the nonce in one
+  // statement, so of N concurrent POSTs presenting the same signed event
+  // exactly ONE gets the row back — every other caller (replayed, expired,
+  // or never issued) sees zero rows and is rejected. `expires_at > now`
+  // folds expiry into the same statement. Consumption happens BEFORE
+  // signature verification, so a nonce is burned by its first presentation
+  // no matter how that attempt ends, and a failed forgery can't retry
+  // against it.
+  const consumed = await c.env.DB.prepare(
+    "DELETE FROM login_nonces WHERE nonce = ?1 AND expires_at > ?2 RETURNING nonce",
+  )
+    .bind(challenge, now)
+    .all<{ nonce: string }>();
+  if (consumed.results.length === 0) {
     return c.json({ error: "unknown or expired challenge" }, 401);
   }
-  // Single-use: consume the nonce BEFORE signature verification, so a nonce
-  // is burned by its first presentation no matter how that attempt ends,
-  // and a failed forgery can't retry against it.
-  //
-  // KNOWN RESIDUAL (P4 review, accepted): KV get→delete is not atomic and KV
-  // is eventually consistent (deletes can take ~60s to propagate across
-  // colos), so two POSTs presenting the SAME captured signed event inside
-  // that window can both mint a session — single-use is best-effort, not
-  // strict. Exploiting it requires possession of the victim's signed event
-  // (TLS break / client compromise) and yields sessions only for that same
-  // pubkey. Strict single-use needs the nonce store moved to D1 (atomic
-  // `DELETE ... RETURNING`, one row wins) — that is a contract change (the
-  // P4 brief mandates "nonce in KV"), deferred to the orchestrator.
-  await c.env.KV.delete(key);
 
   if (!(await verifyEvent(ev))) {
     return c.json({ error: "invalid event signature" }, 401);

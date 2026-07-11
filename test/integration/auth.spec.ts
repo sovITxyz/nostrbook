@@ -1,10 +1,12 @@
 // P4 auth: NIP-07 / kind 22242 challenge-response login. Covers the happy
 // path, every rejection class (forged sig, wrong kind, stale created_at
 // incl. the exact ±600s boundary, expired/replayed/unknown nonce, wrong
-// pubkey, missing/misbound relay tag), cookie flags, session persistence,
-// logout, fixation resistance, and the login/challenge rate limits (per-IP
-// and the global daily challenge budget). Login events are signed in-test
-// with nostr-tools using the committed throwaway fixture keys.
+// pubkey, missing/misbound relay tag), strict single-use nonce consumption
+// under concurrency (nonces live in D1 login_nonces — ratified P4 addendum),
+// cookie flags, session persistence, logout, fixation resistance, and the
+// login/challenge rate limits (per-IP and the global daily challenge
+// budget). Login events are signed in-test with nostr-tools using the
+// committed throwaway fixture keys.
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -18,12 +20,31 @@ import {
 import {
   CHALLENGE_GLOBAL_DAILY_CAP,
   CHALLENGE_GLOBAL_KEY,
-  nonceKey,
   NONCE_TTL_SECONDS,
 } from "../../src/routes/auth";
 import { sessionKey, SESSION_TTL_SECONDS } from "../../src/services/sessions";
 
 const now = () => Math.floor(Date.now() / 1000);
+
+/** Look up a nonce row in the D1 login_nonces store (null = absent/consumed). */
+async function nonceRow(
+  nonce: string,
+): Promise<{ nonce: string; expires_at: number } | null> {
+  return env.DB.prepare(
+    "SELECT nonce, expires_at FROM login_nonces WHERE nonce = ?1",
+  )
+    .bind(nonce)
+    .first<{ nonce: string; expires_at: number }>();
+}
+
+/** Backdate a nonce's expires_at — byte-for-byte what real expiry looks like. */
+async function expireNonce(nonce: string): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE login_nonces SET expires_at = ?1 WHERE nonce = ?2",
+  )
+    .bind(now() - 1, nonce)
+    .run();
+}
 
 /**
  * Park the wall clock just after a second boundary so second-granularity
@@ -76,13 +97,30 @@ describe("GET /login", () => {
 });
 
 describe("GET /login/challenge", () => {
-  it("issues a 64-hex nonce stored in KV with a 5min TTL", async () => {
+  it("issues a 64-hex nonce stored in D1 with a 5min expiry", async () => {
+    const before = now();
     const res = await SELF.fetch("https://nostrbook.net/login/challenge");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { challenge: string; ttl: number };
     expect(body.challenge).toMatch(/^[0-9a-f]{64}$/);
     expect(body.ttl).toBe(NONCE_TTL_SECONDS);
-    expect(await env.KV.get(nonceKey(body.challenge))).not.toBeNull();
+    const row = await nonceRow(body.challenge);
+    expect(row).not.toBeNull();
+    // expires_at = issue time + 300s (bracketed against our own clock reads).
+    expect(row!.expires_at).toBeGreaterThanOrEqual(before + NONCE_TTL_SECONDS);
+    expect(row!.expires_at).toBeLessThanOrEqual(now() + NONCE_TTL_SECONDS);
+  });
+
+  it("sweeps expired nonces opportunistically on issuance", async () => {
+    const stale = await getChallenge();
+    await expireNonce(stale);
+    await getChallenge(); // any later issuance deletes lapsed rows
+    expect(await nonceRow(stale)).toBeNull();
+  });
+
+  it("issuance does not touch KV (write budget is D1's now)", async () => {
+    const challenge = await getChallenge();
+    expect(await env.KV.get(`nonce:${challenge}`)).toBeNull();
   });
 });
 
@@ -171,7 +209,7 @@ describe("POST /login", () => {
     const res = await postLogin(signLoginEvent(challenge, { relay: null }));
     expect(res.status).toBe(401);
     // Rejected before the nonce lookup — the nonce is NOT burned.
-    expect(await env.KV.get(nonceKey(challenge))).not.toBeNull();
+    expect(await nonceRow(challenge)).not.toBeNull();
   });
 
   it("rejects an event bound to another service (challenge-proxy phishing)", async () => {
@@ -195,11 +233,11 @@ describe("POST /login", () => {
     expect(res.status).toBe(200);
   });
 
-  it("rejects an expired nonce (KV TTL lapsed)", async () => {
+  it("rejects an expired nonce (expires_at lapsed)", async () => {
     const challenge = await getChallenge();
-    // KV's minimum TTL is 60s, so tests can't wait out the real 5min expiry;
-    // deleting the key is byte-for-byte what expiry does to the lookup.
-    await env.KV.delete(nonceKey(challenge));
+    // Tests can't wait out the real 5min expiry; backdating expires_at
+    // exercises the exact `expires_at > now` guard in the consuming DELETE.
+    await expireNonce(challenge);
     const res = await postLogin(signLoginEvent(challenge));
     expect(res.status).toBe(401);
   });
@@ -216,7 +254,18 @@ describe("POST /login", () => {
     expect(first.status).toBe(200);
     const replay = await postLogin(ev);
     expect(replay.status).toBe(401);
-    expect(await env.KV.get(nonceKey(challenge))).toBeNull();
+    expect(await nonceRow(challenge)).toBeNull();
+  });
+
+  it("is strictly single-use under CONCURRENCY: two simultaneous POSTs of the same signed event → exactly one wins", async () => {
+    // The atomic `DELETE … RETURNING` is the whole point of the nonce→D1
+    // move: the same captured event presented twice at once must yield
+    // exactly one session, never two (the KV get→delete race allowed two).
+    const challenge = await getChallenge();
+    const ev = signLoginEvent(challenge);
+    const [a, b] = await Promise.all([postLogin(ev), postLogin(ev)]);
+    expect([a.status, b.status].sort()).toEqual([200, 401]);
+    expect(await nonceRow(challenge)).toBeNull();
   });
 
   it("burns the nonce on a FAILED attempt too (no retry against it)", async () => {
@@ -325,7 +374,7 @@ describe("auth rate limits (D1 rate_limits)", () => {
     expect(res.status).toBe(429);
   });
 
-  it("challenge: global daily cap trips across IPs (KV write budget guard)", async () => {
+  it("challenge: global daily cap trips across IPs (nonce write budget guard)", async () => {
     // Seed the global fixed-window counter at the cap directly (500 real
     // requests would be slow); the very next challenge — from a fresh IP
     // that has never hit its own limit — must be denied.

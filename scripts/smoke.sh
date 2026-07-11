@@ -153,6 +153,11 @@ check "malformed npub is 404" 404 "$MAIN_HOST" "/npub1$(printf 'z%.0s' $(seq 1 5
 check "login page responds 200" 200 "$MAIN_HOST" "/login"
 check_body_contains "login page ships the NIP-07 button" "login-button"
 check "login.js asset served" 200 "$MAIN_HOST" "/js/login.js"
+# Nonce store is D1 (login_nonces, ratified P4 addendum): issuance must work
+# against a real migrated database, not just the vitest-applied schema.
+check "login challenge issues a nonce" 200 "$MAIN_HOST" "/login/challenge"
+check_body_contains "challenge body carries a nonce + ttl" '"challenge":"'
+check_body_contains "challenge ttl is 300s" '"ttl":300'
 check "nip05 unknown name responds 200" 200 "$MAIN_HOST" "/.well-known/nostr.json?name=nosuchuser"
 check_body_contains "nip05 unknown name is empty" '"names":{}'
 check_header_contains "nip05 sends CORS *" "access-control-allow-origin: \*"
