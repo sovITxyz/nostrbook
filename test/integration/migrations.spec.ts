@@ -1,5 +1,5 @@
-// Migration application check: 0001_init.sql applies to local D1 (done by the
-// test setup file) and produces the contracted schema.
+// Migration application check: the migrations apply to local D1 (done by the
+// test setup file) and produce the contracted schema.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
@@ -80,5 +80,27 @@ describe("migrations/0001_init.sql", () => {
         "INSERT INTO users (pubkey, handle, claimed_at) VALUES ('pkB', 'casetest', '2026-01-01')",
       ).run(),
     ).rejects.toThrow(/UNIQUE/);
+  });
+});
+
+describe("migrations/0003_login_nonces.sql", () => {
+  it("creates login_nonces with the contracted shape and expiry index", async () => {
+    const table = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='login_nonces'",
+    ).first<{ name: string }>();
+    expect(table?.name).toBe("login_nonces");
+    const index = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_login_nonces_expiry'",
+    ).first<{ name: string }>();
+    expect(index?.name).toBe("idx_login_nonces_expiry");
+    // nonce is the primary key: a duplicate insert must fail.
+    await env.DB.prepare(
+      "INSERT INTO login_nonces (nonce, expires_at) VALUES ('n1', 1)",
+    ).run();
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO login_nonces (nonce, expires_at) VALUES ('n1', 2)",
+      ).run(),
+    ).rejects.toThrow(/UNIQUE|PRIMARY/);
   });
 });

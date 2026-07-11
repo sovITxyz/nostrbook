@@ -4,7 +4,7 @@
  * and mirror them — capped at REFRESH_VERIFY_CAP new-event verifications per
  * user per run (schnorr + render CPU stays bounded), resuming next tick via
  * a `sync.since` watermark kept in users.settings (D1 — the KV free-tier
- * write budget is reserved for sessions, nonces and gen bumps).
+ * write budget is reserved for sessions and gen bumps).
  *
  * Watermark rules (each one closes a data-loss / poisoning hole):
  *   - only VERIFIED events advance it — a forged event from a hostile relay
