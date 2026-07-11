@@ -17,6 +17,8 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
     "hono": "^4.12.29"
   },
   "devDependencies": {

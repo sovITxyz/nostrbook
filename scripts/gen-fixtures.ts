@@ -161,6 +161,23 @@ const XSS_CONTENT = `# XSS torture post
 \`\`\`
 `;
 
+// NIP-01 escaping torture: every risky JSON escaping class in one signed
+// event so the canonical-serialization byte-exactness is pinned by fixtures —
+// the short escapes (\" \\ \b \t \n \f \r), a raw C0 control char, U+2028 and
+// U+2029 line separators (legal unescaped in JSON, hostile in JS source), and
+// non-BMP surrogate pairs. Lone surrogates are deliberately excluded: they
+// are not representable in the UTF-8 fixture file / relay wire format.
+const ESCAPING_TORTURE = `# Escaping torture
+
+Quote " backslash \\ slash / tab \t backspace \b formfeed \f carriage-return \r end-of-line.
+
+Raw controls: SOH \u0001 and US \u001f between words.
+
+Line separator \u2028 and paragraph separator \u2029 inline.
+
+Non-BMP: crab \u{1F980}, clef \u{1D11E}, family 👨‍👩‍👧‍👦, flag 🏴󠁧󠁢󠁳󠁣󠁴󠁿.
+`;
+
 const posts: Record<string, NostrEvent> = {
   aliceHello: sign(alice, {
     kind: 30023,
@@ -205,6 +222,17 @@ const posts: Record<string, NostrEvent> = {
       ["published_at", String(T0 + 400)],
     ],
     content: "Bob writes about *relays*.\n",
+  }),
+  aliceEscapes: sign(alice, {
+    kind: 30023,
+    created_at: T0 + 450,
+    tags: [
+      ["d", "escaping-torture"],
+      ["title", 'Escaping "torture" \t \u2028 title'],
+      ["summary", "Control chars, line separators, and non-BMP in content"],
+      ["published_at", String(T0 + 450)],
+    ],
+    content: ESCAPING_TORTURE,
   }),
 };
 

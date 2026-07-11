@@ -8,7 +8,7 @@
       "content": "{\"name\":\"alice-test\",\"about\":\"Nostrbook throwaway test profile (alice)\",\"picture\":\"https://example.com/alice.png\",\"nip05\":\"alice@nostrbook.net\"}",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "8eec4b7f06d1524da31a4f8efa7af9b8f5e713f26a1cedb4378df5021b974296",
-      "sig": "976f6972d59b83f3f231bf84c51681e58a13acf2a79ff05ed97f647a8e23f0a8925b4991b1dc5b3dbd9152fde462a9cbdc52d83d79bfd1d34b169ccd356a39c9"
+      "sig": "904f2bfdb7c51c7b6162a6dec7363e720d35e0f28b02e5331b75f21152509030e734bdbaeae9caca177725a5532cb1b5ba9d01188efb77e372b594dc3c77e391"
     },
     "bob": {
       "kind": 0,
@@ -17,7 +17,7 @@
       "content": "{\"name\":\"bob-test\",\"about\":\"Nostrbook throwaway test profile (bob)\"}",
       "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
       "id": "a18ac9b38b24ac3d671041a7aaa5efa392e11e79f209b2515f63f4c3a9f4572a",
-      "sig": "bcb878e2a97c7e46ccb896b7b0a92aabf4c1697b59e98f3b34dd19352210198ec8437ac52c482e6704c883da70c1bf6e82525fde273052fd6585e6892c04b529"
+      "sig": "bcef0495bc935a6c8a35802b3aceeae7c9e1c6190b4d753ca309a0782b251ff52348074a5bbe41923c734a99276649acd27994de296a2849b08ce03d3f18f5fa"
     },
     "mallory": {
       "kind": 0,
@@ -26,7 +26,7 @@
       "content": "{\"name\":\"mallory-test\",\"about\":\"Nostrbook throwaway test profile (mallory)\"}",
       "pubkey": "531fe6068134503d2723133227c867ac8fa6c83c537e9a44c3c5bdbdcb1fe337",
       "id": "064de8027670af9ec22d007945463a8475508f6a8e20b7c223012b6c591ecd59",
-      "sig": "4708a831e1eb8dc1ca838b9f31e50f225d8bc45d13c203ff59affb0720db942e5bfd9bb83b66adf0f1ba476c9559b9aadf902097c9131cccf8d85aebe01a20c4"
+      "sig": "81ad5d28ad01115458719800ec5d82249199836bdca14864df63fea583a55c60a7596b56549c07f7069647819594cae7ca8541861be7f659803d184145d88c26"
     }
   },
   "posts": {
@@ -54,7 +54,7 @@
       "content": "# Hello world\n\nThis is **alice**'s first post.\n",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "1a9ef505e58fd74986ee324ffd74bab15fc9d37244613b42b7f00fc49d6c4330",
-      "sig": "70091b11ea320a591da8bd116c885cc942f7586d5001c6c75f204ade7b2b0db9a12b05c36fb3d990ea00958ffe3bd38b7a6840c9cd5985c280f7e96ead643191"
+      "sig": "e8a5dde48905b8bbbc9cd4dbbcd0801eda71077d2fc758b148484461c7dbf1fdffe7f4698b1169ef02463500d9705e4c0dcc29e29fd842028c8ef711ce3927f5"
     },
     "aliceTorture": {
       "kind": 30023,
@@ -80,7 +80,7 @@
       "content": "# Heading 1\n\n## Heading 2 with `inline code`\n\nParagraph with **bold**, *italic*, ~~strike~~, ==mark==, H~2~O and x^2^.\n\n> Blockquote line one\n> line two\n\n- bullet one\n- bullet two\n  - nested\n1. ordered\n2. list\n\n- [ ] task open\n- [x] task done\n\n```js\nconst x = { a: 1 };\nconsole.log(x);\n```\n\n| col a | col b |\n| ----- | ----- |\n| 1     | 2     |\n\n[link](https://example.com) and ![image](https://example.com/img.png)\n\nFootnote reference[^1].\n\n[^1]: The footnote body.\n\n---\n\nFinal paragraph with a bare url https://example.com/bare and an emoji 🦩.\n",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "a4fcd67d08787f86e34699566618beca37a1e91fa74a90a27da374331641bf97",
-      "sig": "63e6d0ccd5079e6c6c2eb91acf8543acb2fef70c954cef748ea819a2a07cd15d5d029bdf3bc9f06ab99fe3cf779ab5589a0915f7a0225838e3bdce3bcd9e53a3"
+      "sig": "ed67e8e7cc85e03d605f1f8cd8f7209cd9780970e990421ae8b580a2db51a804bdfead9c42e506f33cca82f60511d953fce1931667557e6c1fb47b0c5fc1cc81"
     },
     "aliceXss": {
       "kind": 30023,
@@ -106,7 +106,7 @@
       "content": "# XSS torture post\n\n<script>alert('xss-1')</script>\n\n<img src=x onerror=\"alert('xss-2')\">\n\n[click me](javascript:alert('xss-3'))\n\n<a href=\"javascript:alert('xss-4')\">anchor</a>\n\n<iframe src=\"https://evil.example.com\"></iframe>\n\n<svg onload=\"alert('xss-5')\"></svg>\n\n<style>body { background: url('https://evil.example.com/steal') }</style>\n\n</style><script>alert('xss-6')</script>\n\n<div onclick=\"alert('xss-7')\">div handler</div>\n\n![img](x\"onerror=\"alert('xss-8'))\n\n<a href=\"data:text/html,<script>alert('xss-9')</script>\">data url</a>\n\n```html\n<script>alert('inside-code-block-should-render-as-text')</script>\n```\n",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "50cd8793666623c4e095578e79ed1b03b43aad1ff15e42b014f474c5ba3e4725",
-      "sig": "a28ef0a28d3698c23d3a8eca557fcb43bc542b39b55c64ab35613f948c34cdf08f9fcbf8c191b780c9abe7f1300cb5c143b714bc586a7c935ac69fcca65777a7"
+      "sig": "da7da46d630e8f75db149a3ac7389a2d033aeea7c8f65a5157aea0965f4d0021968c79d52b38464e6db9faeb00ee41ac687316bf1cab92dac9df79cc590c0548"
     },
     "bobFirst": {
       "kind": 30023,
@@ -132,7 +132,33 @@
       "content": "Bob writes about *relays*.\n",
       "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
       "id": "107e02ff45c444b3c1f17801cd1e2cf2195c1f74981661cbc9bc577e7be2460f",
-      "sig": "941e5d74b2551decc6abe1ed24492ed9dcfeb47a2760f9f8d24a2d2a57f7aaaf2b379226c20acedc0b729f6c050c726317df7ce7bd0dc7b42eaf3da65aa3d05a"
+      "sig": "68dc7575c1780fce4569373d3f78c3aae7d91567e9c1e8d272c08aa002f0eb716295c5baa5327535fb402c53227e3b940d0ac4eea4b702e4f804fcc4f12a4952"
+    },
+    "aliceEscapes": {
+      "kind": 30023,
+      "created_at": 1700000450,
+      "tags": [
+        [
+          "d",
+          "escaping-torture"
+        ],
+        [
+          "title",
+          "Escaping \"torture\" \t   title"
+        ],
+        [
+          "summary",
+          "Control chars, line separators, and non-BMP in content"
+        ],
+        [
+          "published_at",
+          "1700000450"
+        ]
+      ],
+      "content": "# Escaping torture\n\nQuote \" backslash \\ slash / tab \t backspace \b formfeed \f carriage-return \r end-of-line.\n\nRaw controls: SOH \u0001 and US \u001f between words.\n\nLine separator   and paragraph separator   inline.\n\nNon-BMP: crab 🦀, clef 𝄞, family 👨‍👩‍👧‍👦, flag 🏴󠁧󠁢󠁳󠁣󠁴󠁿.\n",
+      "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+      "id": "aa72e0c89dd2a7f2d7e586630069093aba4ce4bfab14343d9c9956a40e5efe10",
+      "sig": "7e360f15a7beb80262664c6942f5db7c66b11af15ce1a2d010904f088faf016ee14d624bae986da0803e1c24557ebe9c22dcf713bf296371f912d0bdbf500e87"
     }
   },
   "replaceable": {
@@ -156,7 +182,7 @@
       "content": "Version 1 — should LOSE to the newer event.\n",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "12e6db93b8a6c0e967902ad6b35a2862554fd2986b4aa9175dbbae338e25c397",
-      "sig": "fe5e148f2301e434d9aa011d6b08cabbb4fd05c86ffb500e36404a515f202e9a5e6871b80b0852d92653289d5497134f0ab5275ba4ee11918eeed2a574187ecc"
+      "sig": "9f587df9f35d6892662306991ad17b9ae7c08fcb3e8b30e123f8a368a469358e43249f304ea43fd37262e4539574bd76b3d3e6f080a54b5fe3c657cd1f43d610"
     },
     "newer": {
       "kind": 30023,
@@ -178,7 +204,7 @@
       "content": "Version 2 — should WIN over the stale event.\n",
       "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
       "id": "638070b0698a84d8d13d6a0ec30044d3d4f8f2e7a1341fea59cbc3e836b08352",
-      "sig": "f55808a8e433145f4ae7b5f6af936aba6a8447a69cd03e159c4da43204d2e8a3e72cca7f47089846a9e80aa523a5a2ecd2bcecf3d33c0a392140006a90c8728e"
+      "sig": "ee8944993dd3ee1bfbcaeb1e8afdf2d0180707024c8d1f86e691186e66e9d594779130ad0df56e30d7c407d05f53314ab711c9b31243d2fe585d1d93bc09488e"
     }
   },
   "delete": {
@@ -197,7 +223,7 @@
     "content": "delete test",
     "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
     "id": "6c1135b2bb95240ea399b9063935ca489d8fedec022594bbfe296da96a1e19fd",
-    "sig": "754af9fcfc187ef1d74ec841b12e641bffda56d41dbf006c4f9481ba03c57cc661b5e361837d15e64cc31869ea6bb817a10f6cebc4c3794ca12fc2a932fbcf7a"
+    "sig": "2efdb4151156f1122a9d6f650d9d87cdbf74bab782aa6ad2796ba4396b265945e808a31941b7be0afd2e9c0b47e45ae2203d5bef6cb266d511d594054c965834"
   },
   "tampered": [
     {
@@ -226,7 +252,7 @@
         "content": "# Hello world\n\nThis is **alice**'s first post.\n",
         "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
         "id": "1a9ef505e58fd74986ee324ffd74bab15fc9d37244613b42b7f00fc49d6c4330",
-        "sig": "70091b11ea320a591da8bd116c885cc942f7586d5001c6c75f204ade7b2b0db9a12b05c36fb3d990ea00958ffe3bd38b7a6840c9cd5985c280f7e96ead643190"
+        "sig": "e8a5dde48905b8bbbc9cd4dbbcd0801eda71077d2fc758b148484461c7dbf1fdffe7f4698b1169ef02463500d9705e4c0dcc29e29fd842028c8ef711ce3927f0"
       }
     },
     {
@@ -255,7 +281,7 @@
         "content": "# Hello world\n\nThis is **alice**'s first post.\n",
         "pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
         "id": "1a9ef505e58fd74986ee324ffd74bab15fc9d37244613b42b7f00fc49d6c4331",
-        "sig": "70091b11ea320a591da8bd116c885cc942f7586d5001c6c75f204ade7b2b0db9a12b05c36fb3d990ea00958ffe3bd38b7a6840c9cd5985c280f7e96ead643191"
+        "sig": "e8a5dde48905b8bbbc9cd4dbbcd0801eda71077d2fc758b148484461c7dbf1fdffe7f4698b1169ef02463500d9705e4c0dcc29e29fd842028c8ef711ce3927f5"
       }
     },
     {
@@ -284,7 +310,7 @@
         "content": "# Hello world\n\nThis is **alice**'s first post.\n",
         "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
         "id": "7007cfb43ed114869989f41c68b9e35fcf02cfee2b7dba88dd06668ff8aa4269",
-        "sig": "70091b11ea320a591da8bd116c885cc942f7586d5001c6c75f204ade7b2b0db9a12b05c36fb3d990ea00958ffe3bd38b7a6840c9cd5985c280f7e96ead643191"
+        "sig": "e8a5dde48905b8bbbc9cd4dbbcd0801eda71077d2fc758b148484461c7dbf1fdffe7f4698b1169ef02463500d9705e4c0dcc29e29fd842028c8ef711ce3927f5"
       }
     }
   ]
