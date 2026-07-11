@@ -1,0 +1,84 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderPost — feature corpus (snapshots) > renders the XSS fixture to inert output 1`] = `
+"<h1 id="xss-torture-post">XSS torture post</h1>
+<p>&lt;script&gt;alert('xss-1')&lt;/script&gt;</p>
+<p>&lt;img src=x onerror=&quot;alert('xss-2')&quot;&gt;</p>
+<p>[click me](javascript:alert('xss-3'))</p>
+<p>&lt;a href=&quot;javascript:alert('xss-4')&quot;&gt;anchor&lt;/a&gt;</p>
+<p>&lt;iframe src=&quot;<a href="https://evil.example.com" rel="nofollow noopener">https://evil.example.com</a>&quot;&gt;&lt;/iframe&gt;</p>
+<p>&lt;svg onload=&quot;alert('xss-5')&quot;&gt;&lt;/svg&gt;</p>
+<p>&lt;style&gt;body { background: url('<a href="https://evil.example.com/steal" rel="nofollow noopener">https://evil.example.com/steal</a>') }&lt;/style&gt;</p>
+<p>&lt;/style&gt;&lt;script&gt;alert('xss-6')&lt;/script&gt;</p>
+<p>&lt;div onclick=&quot;alert('xss-7')&quot;&gt;div handler&lt;/div&gt;</p>
+<p></p>
+<p>&lt;a href=&quot;data:text/html,&lt;script&gt;alert('xss-9')&lt;/script&gt;&quot;&gt;data url&lt;/a&gt;</p>
+<pre><code class="hljs language-html"><span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript"><span class="hljs-title function_">alert</span>(<span class="hljs-string">&#x27;inside-code-block-should-render-as-text&#x27;</span>)</span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span>
+</code></pre>
+"
+`;
+
+exports[`renderPost — feature corpus (snapshots) > renders the escaping torture fixture 1`] = `
+"<h1 id="escaping-torture">Escaping torture</h1>
+<p>Quote &quot; backslash \\ slash / tab 	 backspace  formfeed  carriage-return
+end-of-line.</p>
+<p>Raw controls: SOH  and US  between words.</p>
+<p>Line separator   and paragraph separator   inline.</p>
+<p>Non-BMP: crab 🦀, clef 𝄞, family 👨‍👩‍👧‍👦, flag 🏴󠁧󠁢󠁳󠁣󠁴󠁿.</p>
+"
+`;
+
+exports[`renderPost — feature corpus (snapshots) > renders the markdown torture fixture 1`] = `
+"<h1 id="heading-1">Heading 1</h1>
+<h2 id="heading-2-with-inline-code">Heading 2 with <code>inline code</code></h2>
+<p>Paragraph with <strong>bold</strong>, <em>italic</em>, <s>strike</s>, <mark>mark</mark>, H<sub>2</sub>O and x<sup>2</sup>.</p>
+<blockquote>
+<p>Blockquote line one
+line two</p>
+</blockquote>
+<ul>
+<li>bullet one</li>
+<li>bullet two
+<ul>
+<li>nested</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li>ordered</li>
+<li>list</li>
+</ol>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="" type="checkbox"> task open</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" checked="" disabled="" type="checkbox"> task done</li>
+</ul>
+<pre><code class="hljs language-js"><span class="hljs-keyword">const</span> x = { <span class="hljs-attr">a</span>: <span class="hljs-number">1</span> };
+<span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(x);
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>col a</th>
+<th>col b</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p><a href="https://example.com" rel="nofollow noopener">link</a> and <img src="https://example.com/img.png" alt="image"></p>
+<p>Footnote reference<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup>.</p>
+<hr>
+<p>Final paragraph with a bare url <a href="https://example.com/bare" rel="nofollow noopener">https://example.com/bare</a> and an emoji 🦩.</p>
+<hr class="footnotes-sep">
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p>The footnote body. <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>
+"
+`;
