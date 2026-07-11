@@ -70,3 +70,6 @@ renderPost(md: string): string        // markdown-it + strict sanitizer; NO raw 
 
 **Testing rules (every phase)**: implementer ships unit tests with the code; routes get `SELF.fetch` integration tests with Host overrides (`nostrbook.net`, `alice.nostrbook.net`, `unknown.nostrbook.net`, `nostrbook.net.evil.com`); rendered HTML/XML gets snapshot tests; `scripts/smoke.sh <base-url>` grows each phase and must pass; CI = typecheck + vitest.
 
+
+## Addendum (P0, orchestrator-approved)
+- `src/middleware/guard.ts` honors a client-supplied `X-Forwarded-Host` header as the Host override **only when `ENVIRONMENT === "development"`** (needed because `wrangler dev` rewrites the Host header). The committed `wrangler.jsonc` ships `ENVIRONMENT="production"`, so the override is dead in any stock deploy; dev gets it via `.dev.vars`. Do not widen this affordance.
