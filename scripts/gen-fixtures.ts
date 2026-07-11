@@ -317,6 +317,64 @@ const tieB = sign(alice, {
   content: "Tie candidate B body.\n",
 });
 
+// Intermediate edit of hello-world created BETWEEN the post (T0+100) and its
+// delete (T0+700). NIP-09 horizon: mirroring this AFTER the delete must keep
+// it hidden (deleted=1), not resurrect the deleted post.
+const aliceHelloEdit = sign(alice, {
+  kind: 30023,
+  created_at: T0 + 650,
+  tags: [
+    ["d", "hello-world"],
+    ["title", "Hello world (edited)"],
+    ["published_at", String(T0 + 650)],
+  ],
+  content: "# Hello world\n\nEdited before the delete, delivered after.\n",
+});
+
+// Kind 0 carrying a stray d tag (some clients copy tags around): must still
+// land in the (pubkey, 0, '') slot — d tags parameterize only kinds
+// 30000-39999 (NIP-01).
+const aliceProfileDTag = sign(alice, {
+  kind: 0,
+  created_at: T0 + 10,
+  tags: [["d", "stray-d-tag"]],
+  content: JSON.stringify({
+    name: "alice-dtag",
+    about: "kind 0 with a stray d tag — slot must still be (pubkey, 0, '')",
+  }),
+});
+
+// Valid but FAR-FUTURE event (2100-01-01): cron ingestion must skip it and
+// never let it advance the sync watermark.
+const aliceFuture = sign(alice, {
+  kind: 30023,
+  created_at: 4102444800,
+  tags: [
+    ["d", "from-the-future"],
+    ["title", "Back to the future"],
+  ],
+  content: "This timestamp is decades ahead of any honest clock.\n",
+});
+
+// Flood of 65 alice posts — MORE than the cron's 60-event relay page, so the
+// refresh must page backward with `until` or the oldest posts are silently
+// dropped by NIP-01 `limit` truncation.
+const floodAlice: NostrEvent[] = [];
+for (let i = 1; i <= 65; i++) {
+  const nn = String(i).padStart(2, "0");
+  floodAlice.push(
+    sign(alice, {
+      kind: 30023,
+      created_at: T0 + 2000 + i,
+      tags: [
+        ["d", `flood-${nn}`],
+        ["title", `Flood post ${nn}`],
+      ],
+      content: `Flood body ${nn}.\n`,
+    }),
+  );
+}
+
 // Bulk bob posts (12) — exercises the npub on-demand mirror cap (newest 10
 // events per request) and progressive backfill.
 const bulkBob: NostrEvent[] = [];
@@ -382,9 +440,13 @@ const validEvents: NostrEvent[] = [
   deleteEvent,
   deleteByMallory,
   aliceProfileOld,
+  aliceHelloEdit,
+  aliceProfileDTag,
+  aliceFuture,
   tieA,
   tieB,
   ...bulkBob,
+  ...floodAlice,
 ];
 if (tieA.id === tieB.id) {
   throw new Error("self-check failed: tie pair must have distinct ids");
@@ -434,8 +496,12 @@ writeFileSync(
       extras: {
         deleteByMallory,
         aliceProfileOld,
+        aliceHelloEdit,
+        aliceProfileDTag,
+        aliceFuture,
         tie: { a: tieA, b: tieB },
         bulkBob,
+        floodAlice,
       },
       tampered,
     },

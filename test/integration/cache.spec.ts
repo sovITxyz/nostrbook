@@ -61,7 +61,7 @@ describe("tenant edge cache (Cache API + gen keys)", () => {
       ),
     ).toBe("hit");
 
-    expect(await mirrorEvent(env, aliceTorture)).toBe("stored"); // gen → 1201
+    expect(await mirrorEvent(env, aliceTorture)).toBe("stored"); // gen → new unique value
 
     const r2 = await SELF.fetch("https://alice.nostrbook.net/");
     expect(r2.headers.get(CACHE_STATUS_HEADER)).toBe("miss");

@@ -17,7 +17,9 @@ beforeEach(async () => {
 
 const aliceProfile = fixtures.profiles.alice as NostrEvent;
 const aliceProfileOld = fixtures.extras.aliceProfileOld as NostrEvent;
+const aliceProfileDTag = fixtures.extras.aliceProfileDTag as NostrEvent;
 const aliceHello = fixtures.posts.aliceHello as NostrEvent;
+const aliceHelloEdit = fixtures.extras.aliceHelloEdit as NostrEvent;
 const stale = fixtures.replaceable.stale as NostrEvent;
 const newer = fixtures.replaceable.newer as NostrEvent;
 const deleteByAlice = fixtures.delete as NostrEvent;
@@ -89,15 +91,18 @@ describe("mirrorEvent — store + render-at-ingest", () => {
     // FTS row exists with rowid = events.rowid:
     expect(await ftsRowids("hello")).toContain(row!.row_id);
 
-    expect(await gen(aliceHello.pubkey)).toBe("1");
+    // Gen values are opaque unique strings; storing must set one.
+    expect(await gen(aliceHello.pubkey)).not.toBeNull();
   });
 
   it("is idempotent for an already-stored id (no duplicate, no extra gen bump)", async () => {
     expect(await mirrorEvent(env, aliceHello)).toBe("stored");
+    const g1 = await gen(aliceHello.pubkey);
+    expect(g1).not.toBeNull();
     expect(await mirrorEvent(env, aliceHello)).toBe("stored");
     const rows = await slotRows(aliceHello.pubkey, 30023, "hello-world");
     expect(rows.length).toBe(1);
-    expect(await gen(aliceHello.pubkey)).toBe("1");
+    expect(await gen(aliceHello.pubkey)).toBe(g1); // no extra bump
   });
 
   it("stores kind 0 into events AND upserts the profiles row", async () => {
@@ -124,6 +129,7 @@ describe("mirrorEvent — verification gate", () => {
 describe("mirrorEvent — replaceable upsert", () => {
   it("returns 'stale' and never overwrites when an older version arrives", async () => {
     expect(await mirrorEvent(env, newer)).toBe("stored");
+    const g1 = await gen(newer.pubkey);
     expect(await mirrorEvent(env, stale)).toBe("stale");
 
     const rows = await slotRows(newer.pubkey, 30023, "replaceable");
@@ -132,8 +138,8 @@ describe("mirrorEvent — replaceable upsert", () => {
     expect(rows[0]!.content).toContain("Version 2");
     // The stale version never reached the search index:
     expect(await ftsRowids("lose")).toEqual([]);
-    // Exactly one gen bump (the stale mirror must not invalidate caches):
-    expect(await gen(newer.pubkey)).toBe("1");
+    // The stale mirror must not move the generation (no cache invalidation):
+    expect(await gen(newer.pubkey)).toBe(g1);
   });
 
   it("replaces an older version and keeps posts_fts in sync (rowid-coupled)", async () => {
@@ -194,6 +200,23 @@ describe("mirrorEvent — replaceable upsert", () => {
       "alice-test",
     );
   });
+
+  it("ignores stray d tags on kind 0 — the slot is always (pubkey, 0, '')", async () => {
+    expect(await mirrorEvent(env, aliceProfile)).toBe("stored"); // T0, no d tag
+    expect(await mirrorEvent(env, aliceProfileDTag)).toBe("stored"); // T0+10, stray d tag
+
+    // The newer kind 0 REPLACED the older one in the '' slot — no second row
+    // parked under the stray d tag where it would never be replaced:
+    const rows = await slotRows(aliceProfile.pubkey, 0, "");
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.id).toBe(aliceProfileDTag.id);
+    expect((await slotRows(aliceProfile.pubkey, 0, "stray-d-tag")).length).toBe(
+      0,
+    );
+    expect((await getProfile(env, aliceProfile.pubkey))?.name).toBe(
+      "alice-dtag",
+    );
+  });
 });
 
 describe("mirrorEvent — kind 5 deletes", () => {
@@ -201,6 +224,7 @@ describe("mirrorEvent — kind 5 deletes", () => {
     expect(await mirrorEvent(env, aliceHello)).toBe("stored");
     const before = await rowById(aliceHello.id);
     expect(await ftsRowids("hello")).toContain(before!.row_id);
+    const g1 = await gen(aliceHello.pubkey);
 
     expect(await mirrorEvent(env, deleteByAlice)).toBe("stored");
 
@@ -209,19 +233,40 @@ describe("mirrorEvent — kind 5 deletes", () => {
     expect(await ftsRowids("hello")).toEqual([]);
     // The delete marker itself is mirrored:
     expect(await rowById(deleteByAlice.id)).not.toBeNull();
-    // Deletion invalidates the blog's cache:
-    expect(await gen(aliceHello.pubkey)).toBe("2");
+    // Deletion invalidates the blog's cache (generation moved):
+    const g2 = await gen(aliceHello.pubkey);
+    expect(g2).not.toBeNull();
+    expect(g2).not.toBe(g1);
   });
 
   it("NEVER deletes another pubkey's events (mallory referencing alice)", async () => {
     expect(await mirrorEvent(env, aliceHello)).toBe("stored");
+    const gAlice = await gen(aliceHello.pubkey);
     expect(await mirrorEvent(env, deleteByMallory)).toBe("stored");
 
     const row = await rowById(aliceHello.id);
     expect(row!.deleted).toBe(0); // untouched
     expect(await ftsRowids("hello")).toContain(row!.row_id);
     // alice's cache generation did not move — only mallory's:
-    expect(await gen(aliceHello.pubkey)).toBe("1");
-    expect(await gen(deleteByMallory.pubkey)).toBe("1");
+    expect(await gen(aliceHello.pubkey)).toBe(gAlice);
+    expect(await gen(deleteByMallory.pubkey)).not.toBeNull();
+  });
+
+  it("does not resurrect a deleted post when an intermediate edit arrives late (NIP-09 horizon)", async () => {
+    // v1 (T0+100) stored, then deleted (kind 5 at T0+700 with a-tag):
+    expect(await mirrorEvent(env, aliceHello)).toBe("stored");
+    expect(await mirrorEvent(env, deleteByAlice)).toBe("stored");
+
+    // An edit created BEFORE the delete (T0+650) arrives AFTER it. It wins
+    // the replaceable slot (newer than v1) but must stay hidden — the stored
+    // delete's created_at covers it.
+    expect(await mirrorEvent(env, aliceHelloEdit)).toBe("stored");
+
+    const rows = await slotRows(aliceHello.pubkey, 30023, "hello-world");
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.id).toBe(aliceHelloEdit.id);
+    expect(rows[0]!.deleted).toBe(1); // tombstone horizon holds
+    // ...and it never entered the search index:
+    expect(await ftsRowids("edited")).toEqual([]);
   });
 });

@@ -48,7 +48,15 @@ export const cache: MiddlewareHandler<DispatchEnv> = async (c, next) => {
     return next();
   }
 
-  const gen = (await c.env.KV.get(`gen:${site.pubkey}`)) ?? "0";
+  let gen: string;
+  try {
+    gen = (await c.env.KV.get(`gen:${site.pubkey}`)) ?? "0";
+  } catch {
+    // KV outage or free-tier read quota exhausted: "cache failures degrade
+    // to serving uncached" must include the gen read, or every page view
+    // becomes a 500 while D1 and the Cache API are perfectly healthy.
+    return next();
+  }
   const host = `${site.user.handle.toLowerCase()}.${c.env.MAIN_HOST.toLowerCase()}`;
   const key = cacheKey(host, new URL(c.req.url).pathname, gen);
 

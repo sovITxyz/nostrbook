@@ -10,7 +10,6 @@ import {
   rowToEvent,
 } from "../services/events";
 import { getProfile as getProfileRow } from "../services/profiles";
-import { renderPost } from "../markdown";
 import { BlogHome } from "../views/tenant/home";
 import { PostPage } from "../views/tenant/post";
 import { NotFoundPage } from "../views/tenant/not-found";
@@ -39,9 +38,12 @@ export type TenantDataProvider = {
 
 /**
  * D1-backed default provider. getPost serves events.rendered — the HTML
- * produced by renderPost at MIRROR time (render-at-ingest contract). The
- * renderPost fallback only fires for rows that somehow predate migration
- * 0002 (none exist in practice: ingestion and the column shipped together).
+ * produced by renderPost at MIRROR time (render-at-ingest contract). A row
+ * with a NULL rendered column cannot come from mirrorEvent (which always
+ * renders kind 30023); if one ever appears (manual insert, migration gap),
+ * it is treated as NOT FOUND rather than rendered per request — the P2→P3
+ * addendum forbids renderPost on the request path (up to ~150ms CPU on
+ * hostile 32 KiB input vs the free-tier 10ms budget).
  */
 const d1Provider: TenantDataProvider = {
   async getProfile(env, pubkey) {
@@ -55,11 +57,8 @@ const d1Provider: TenantDataProvider = {
   },
   async getPost(env, pubkey, slug) {
     const row = await getPostRow(env, pubkey, slug);
-    if (!row) return null;
-    return {
-      event: rowToEvent(row),
-      html: row.rendered ?? renderPost(row.content),
-    };
+    if (!row || row.rendered === null) return null;
+    return { event: rowToEvent(row), html: row.rendered };
   },
 };
 

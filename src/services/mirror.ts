@@ -10,6 +10,18 @@ import { upsertProfile } from "./profiles";
 
 export type MirrorResult = "stored" | "stale" | "invalid";
 
+/** Options for mirrorEvent / applyDelete. */
+export type MirrorOptions = {
+  /**
+   * Bump the KV cache generation after a stored change (default true, the
+   * contract behavior). Multi-event ingest sessions (cron refresh, npub
+   * on-demand mirror) pass `false` and call bumpGen ONCE per touched pubkey
+   * afterwards — the KV free tier allows only 1,000 writes/day, so mirroring
+   * N events must not cost N puts.
+   */
+  bumpGen?: boolean;
+};
+
 const HEX_64 = /^[0-9a-f]{64}$/;
 
 /** Current cache generation for a pubkey ("0" when never bumped). */
@@ -21,12 +33,36 @@ export async function getGen(env: Env, pubkey: string): Promise<string> {
  * Bump the KV cache generation for a pubkey. Every stored mirror change
  * (post, profile, delete) invalidates that blog's edge cache by changing the
  * `?g=<gen>` component of its cache keys (src/middleware/cache.ts).
+ *
+ * The value is a unique opaque string, NOT a counter: the cache middleware
+ * only ever compares generations for equality, and the previous
+ * get→parseInt→put read-modify-write let two concurrent bumps write the same
+ * next value — collapsing two invalidations into one and pinning a stale
+ * page until its TTL. One KV write, no read.
  */
 export async function bumpGen(env: Env, pubkey: string): Promise<void> {
-  const key = `gen:${pubkey}`;
-  const current = Number.parseInt((await env.KV.get(key)) ?? "0", 10);
-  const next = Number.isFinite(current) && current >= 0 ? current + 1 : 1;
-  await env.KV.put(key, String(next));
+  const gen = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+  await env.KV.put(`gen:${pubkey}`, gen);
+}
+
+/**
+ * Slot d_tag per NIP-01: only parameterized-replaceable kinds (30000-39999)
+ * are keyed by their `d` tag. Every other kind (0, 5, ...) occupies the
+ * (pubkey, kind, '') slot even when a client attached a stray d tag —
+ * otherwise two kind-0 rows could coexist and the older would never be
+ * replaced.
+ */
+function slotDTag(ev: NostrEvent): string {
+  return ev.kind >= 30_000 && ev.kind < 40_000 ? getDTag(ev) : "";
+}
+
+/** True when `err` looks like a D1/SQLite uniqueness-constraint violation. */
+function isConstraintError(err: unknown): boolean {
+  const msg =
+    err instanceof Error
+      ? `${err.message} ${err.cause instanceof Error ? err.cause.message : ""}`
+      : String(err);
+  return /UNIQUE constraint|SQLITE_CONSTRAINT|constraint failed/i.test(msg);
 }
 
 /** Row subset used for replaceable-slot comparisons. */
@@ -74,6 +110,7 @@ function losesToCurrent(current: SlotRow, incoming: NostrEvent): boolean {
 export async function mirrorEvent(
   env: Env,
   ev: NostrEvent,
+  opts?: MirrorOptions,
 ): Promise<MirrorResult> {
   // Already mirrored? The stored row was verified when it was stored; a
   // matching id means byte-identical content, so skip crypto entirely when
@@ -89,61 +126,122 @@ export async function mirrorEvent(
 
   if (!(await verifyEvent(ev))) return "invalid";
 
-  if (ev.kind === 5) return applyDelete(env, ev);
+  if (ev.kind === 5) return applyDelete(env, ev, opts);
 
-  const dTag = getDTag(ev);
-  const current = await currentSlot(env, ev.pubkey, ev.kind, dTag);
-  if (current && losesToCurrent(current, ev)) return "stale";
+  const dTag = slotDTag(ev);
 
   // Render-at-ingest (contract addendum): renderPost+sanitize exactly once,
   // here; the request path serves the stored HTML.
   const rendered = ev.kind === 30023 ? renderPost(ev.content) : null;
 
-  const stmts: D1PreparedStatement[] = [];
-  if (current) {
-    // Replace: drop the losing row AND its FTS row (rowid-coupled).
-    stmts.push(
-      env.DB.prepare("DELETE FROM posts_fts WHERE rowid = ?").bind(
-        current.row_id,
-      ),
-      env.DB.prepare("DELETE FROM events WHERE rowid = ?").bind(
-        current.row_id,
-      ),
-    );
-  }
-  stmts.push(
-    env.DB.prepare(
-      `INSERT INTO events (id, pubkey, kind, d_tag, created_at, content, tags, sig, raw, deleted, rendered)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-    ).bind(
-      ev.id,
-      ev.pubkey,
-      ev.kind,
-      dTag,
-      ev.created_at,
-      ev.content,
-      JSON.stringify(ev.tags),
-      ev.sig,
-      JSON.stringify(pickEventFields(ev)),
-      rendered,
-    ),
-  );
-  if (ev.kind === 30023) {
-    // FTS row with rowid = events.rowid, resolved inside the same atomic
-    // batch via INSERT...SELECT (the rowid does not exist before the insert).
-    const meta = postMeta(ev);
+  // NIP-09 delete horizon: a stored kind 5 whose `a` tag addresses this
+  // (kind:pubkey:d_tag) with created_at >= this version's created_at deletes
+  // it even when the version ARRIVES after the delete was mirrored —
+  // otherwise an intermediate edit (created before the delete, delivered
+  // late by a relay) would resurrect a deleted post.
+  const tombstoned =
+    ev.kind === 30023 && (await coveredByDeleteHorizon(env, ev, dTag));
+
+  // The slot read below and the batch are not atomic: a concurrent mirror of
+  // the same id or slot can commit in between, making this batch trip the
+  // events PRIMARY KEY / UNIQUE(pubkey, kind, d_tag) constraint. Re-read and
+  // reclassify instead of surfacing a 500 — one bounded retry.
+  for (let attempt = 0; ; attempt++) {
+    const current = await currentSlot(env, ev.pubkey, ev.kind, dTag);
+    if (current && losesToCurrent(current, ev)) return "stale";
+
+    const stmts: D1PreparedStatement[] = [];
+    if (current) {
+      // Replace: drop the losing row AND its FTS row (rowid-coupled).
+      stmts.push(
+        env.DB.prepare("DELETE FROM posts_fts WHERE rowid = ?").bind(
+          current.row_id,
+        ),
+        env.DB.prepare("DELETE FROM events WHERE rowid = ?").bind(
+          current.row_id,
+        ),
+      );
+    }
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO posts_fts (rowid, title, summary, content)
-         SELECT rowid, ?, ?, ? FROM events WHERE id = ?`,
-      ).bind(meta.title, meta.summary ?? "", ev.content, ev.id),
+        `INSERT INTO events (id, pubkey, kind, d_tag, created_at, content, tags, sig, raw, deleted, rendered)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        ev.id,
+        ev.pubkey,
+        ev.kind,
+        dTag,
+        ev.created_at,
+        ev.content,
+        JSON.stringify(ev.tags),
+        ev.sig,
+        JSON.stringify(pickEventFields(ev)),
+        tombstoned ? 1 : 0,
+        rendered,
+      ),
     );
+    if (ev.kind === 30023 && !tombstoned) {
+      // FTS row with rowid = events.rowid, resolved inside the same atomic
+      // batch via INSERT...SELECT (the rowid does not exist before the insert).
+      const meta = postMeta(ev);
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO posts_fts (rowid, title, summary, content)
+           SELECT rowid, ?, ?, ? FROM events WHERE id = ?`,
+        ).bind(meta.title, meta.summary ?? "", ev.content, ev.id),
+      );
+    }
+    try {
+      await env.DB.batch(stmts); // D1 batch runs as a single transaction
+      break;
+    } catch (err) {
+      if (attempt > 0 || !isConstraintError(err)) throw err;
+      // Raced by a concurrent mirror. If it stored this exact id, the work
+      // is done (identical content); otherwise retry once with a fresh slot.
+      const raced = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+        .bind(ev.id)
+        .first();
+      if (raced) return "stored";
+    }
   }
-  await env.DB.batch(stmts); // D1 batch runs as a single transaction
 
   if (ev.kind === 0) await upsertProfile(env, ev);
-  await bumpGen(env, ev.pubkey);
+  if (opts?.bumpGen !== false) await bumpGen(env, ev.pubkey);
   return "stored";
+}
+
+/**
+ * Does a stored kind 5 of the same pubkey delete this (kind, pubkey, d_tag)
+ * address at or after `ev.created_at`? One row per (pubkey, 5, d_tag) slot
+ * exists at most, so this scan is cheap. Known limitation (schema-imposed):
+ * a newer delete REPLACES an older one in the same slot, so an old delete's
+ * horizon survives only as long as its marker row does.
+ */
+async function coveredByDeleteHorizon(
+  env: Env,
+  ev: NostrEvent,
+  dTag: string,
+): Promise<boolean> {
+  const addr = `${ev.kind}:${ev.pubkey}:${dTag}`;
+  const rs = await env.DB.prepare(
+    "SELECT tags FROM events WHERE pubkey = ? AND kind = 5 AND created_at >= ?",
+  )
+    .bind(ev.pubkey, ev.created_at)
+    .all<{ tags: string }>();
+  for (const row of rs.results) {
+    try {
+      const tags: unknown = JSON.parse(row.tags);
+      if (!Array.isArray(tags)) continue;
+      for (const tag of tags) {
+        if (Array.isArray(tag) && tag[0] === "a" && tag[1] === addr) {
+          return true;
+        }
+      }
+    } catch {
+      // malformed tags blob — ignore this marker
+    }
+  }
+  return false;
 }
 
 /**
@@ -158,7 +256,11 @@ export async function mirrorEvent(
  * effects apply regardless (deletions are not replaceable; an older second
  * delete must still hide its own targets).
  */
-async function applyDelete(env: Env, ev: NostrEvent): Promise<MirrorResult> {
+async function applyDelete(
+  env: Env,
+  ev: NostrEvent,
+  opts?: MirrorOptions,
+): Promise<MirrorResult> {
   const eIds: string[] = [];
   const addrs: { kind: number; dTag: string }[] = [];
   for (const tag of ev.tags) {
@@ -172,64 +274,84 @@ async function applyDelete(env: Env, ev: NostrEvent): Promise<MirrorResult> {
     }
   }
 
-  const stmts: D1PreparedStatement[] = [];
-  for (let i = 0; i < eIds.length; i += 50) {
-    const chunk = eIds.slice(i, i + 50);
-    const placeholders = chunk.map(() => "?").join(", ");
-    stmts.push(
-      env.DB.prepare(
-        `UPDATE events SET deleted = 1
-         WHERE pubkey = ? AND kind != 5 AND id IN (${placeholders})`,
-      ).bind(ev.pubkey, ...chunk),
-    );
-  }
-  for (const a of addrs) {
-    stmts.push(
-      env.DB.prepare(
-        `UPDATE events SET deleted = 1
-         WHERE pubkey = ? AND kind = ? AND d_tag = ? AND kind != 5
-           AND created_at <= ?`,
-      ).bind(ev.pubkey, a.kind, a.dTag, ev.created_at),
-    );
-  }
-  // Hidden posts leave the search index.
-  stmts.push(
-    env.DB.prepare(
-      `DELETE FROM posts_fts WHERE rowid IN
-         (SELECT rowid FROM events WHERE pubkey = ? AND deleted = 1)`,
-    ).bind(ev.pubkey),
-  );
+  // Kind 5 is not parameterized-replaceable, so its marker always lives in
+  // the (pubkey, 5, '') slot regardless of stray d tags.
+  const dTag = slotDTag(ev);
 
-  // Store the delete marker itself when it is the newest in its slot (the
-  // UNIQUE(pubkey, kind, d_tag) schema allows only one row per slot).
-  const dTag = getDTag(ev);
-  const current = await currentSlot(env, ev.pubkey, 5, dTag);
-  if (!current || !losesToCurrent(current, ev)) {
-    if (current) {
+  // Same check-then-write race as the main store path: retry once when a
+  // concurrent mirror trips the id/slot uniqueness constraints (the batch is
+  // atomic, so the deleted=1 side effects roll back with it and re-run).
+  for (let attempt = 0; ; attempt++) {
+    const stmts: D1PreparedStatement[] = [];
+    for (let i = 0; i < eIds.length; i += 50) {
+      const chunk = eIds.slice(i, i + 50);
+      const placeholders = chunk.map(() => "?").join(", ");
       stmts.push(
-        env.DB.prepare("DELETE FROM events WHERE rowid = ?").bind(
-          current.row_id,
+        env.DB.prepare(
+          `UPDATE events SET deleted = 1
+           WHERE pubkey = ? AND kind != 5 AND id IN (${placeholders})`,
+        ).bind(ev.pubkey, ...chunk),
+      );
+    }
+    for (const a of addrs) {
+      stmts.push(
+        env.DB.prepare(
+          `UPDATE events SET deleted = 1
+           WHERE pubkey = ? AND kind = ? AND d_tag = ? AND kind != 5
+             AND created_at <= ?`,
+        ).bind(ev.pubkey, a.kind, a.dTag, ev.created_at),
+      );
+    }
+    // Hidden posts leave the search index.
+    stmts.push(
+      env.DB.prepare(
+        `DELETE FROM posts_fts WHERE rowid IN
+           (SELECT rowid FROM events WHERE pubkey = ? AND deleted = 1)`,
+      ).bind(ev.pubkey),
+    );
+
+    // Store the delete marker itself when it is the newest in its slot (the
+    // UNIQUE(pubkey, kind, d_tag) schema allows only one row per slot).
+    const current = await currentSlot(env, ev.pubkey, 5, dTag);
+    if (!current || !losesToCurrent(current, ev)) {
+      if (current) {
+        stmts.push(
+          env.DB.prepare("DELETE FROM events WHERE rowid = ?").bind(
+            current.row_id,
+          ),
+        );
+      }
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO events (id, pubkey, kind, d_tag, created_at, content, tags, sig, raw, deleted, rendered)
+           VALUES (?, ?, 5, ?, ?, ?, ?, ?, ?, 0, NULL)`,
+        ).bind(
+          ev.id,
+          ev.pubkey,
+          dTag,
+          ev.created_at,
+          ev.content,
+          JSON.stringify(ev.tags),
+          ev.sig,
+          JSON.stringify(pickEventFields(ev)),
         ),
       );
     }
-    stmts.push(
-      env.DB.prepare(
-        `INSERT INTO events (id, pubkey, kind, d_tag, created_at, content, tags, sig, raw, deleted, rendered)
-         VALUES (?, ?, 5, ?, ?, ?, ?, ?, ?, 0, NULL)`,
-      ).bind(
-        ev.id,
-        ev.pubkey,
-        dTag,
-        ev.created_at,
-        ev.content,
-        JSON.stringify(ev.tags),
-        ev.sig,
-        JSON.stringify(pickEventFields(ev)),
-      ),
-    );
+
+    try {
+      await env.DB.batch(stmts);
+      break;
+    } catch (err) {
+      if (attempt > 0 || !isConstraintError(err)) throw err;
+      // Raced by a concurrent mirror of this same delete: its batch already
+      // applied identical side effects.
+      const raced = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+        .bind(ev.id)
+        .first();
+      if (raced) break;
+    }
   }
 
-  await env.DB.batch(stmts);
-  await bumpGen(env, ev.pubkey);
+  if (opts?.bumpGen !== false) await bumpGen(env, ev.pubkey);
   return "stored";
 }
