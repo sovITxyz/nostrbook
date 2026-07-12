@@ -193,6 +193,22 @@ describe("blog class (tenant subdomains)", () => {
     expect(res.status).toBe(404);
     expectBlogClass(res);
   });
+
+  it("blog CSP pins base-uri + form-action (sanitizer defense-in-depth)", async () => {
+    // Neither directive falls back to default-src. Blog pages render hostile
+    // relay content; the sanitizer drops <base>/<form>, but the CSP must not
+    // be silent if the sanitizer ever regresses (review fix).
+    expect(BLOG_CSP).toContain("base-uri 'none'");
+    expect(BLOG_CSP).toContain("form-action 'none'");
+    // …and blog markup legitimately ships neither element, so the pins are
+    // free: home + post pages contain no <form>/<base>.
+    for (const path of ["/", "/hello-world"]) {
+      const res = await SELF.fetch(`https://alice.nostrbook.net${path}`);
+      const html = (await res.text()).toLowerCase();
+      expect(html).not.toContain("<form");
+      expect(html).not.toContain("<base");
+    }
+  });
 });
 
 describe("blog class (apex /npub1… views)", () => {

@@ -38,15 +38,31 @@ import type { AppEnv, Site } from "../types";
  */
 
 /**
- * Blog-class CSP. Per the P7 contract, with one ratification-pending change:
- * style-src gains 'self' because every blog page loads the shared base
- * stylesheet /css/style.css via <link rel="stylesheet"> (same origin) — the
- * contract string ('unsafe-inline' alone) would strip ALL base styling from
- * every blog. 'self' admits only the platform's own static assets (served
- * with nosniff, so an HTML page can never be smuggled in as a stylesheet).
+ * Blog-class CSP. Per the P7 contract, with ratification-pending changes
+ * (bundled in the P7 addendum in docs/phases/CONTRACTS.md):
+ *
+ *   - style-src gains 'self': every blog page loads the shared base
+ *     stylesheet /css/style.css via <link rel="stylesheet"> (same origin) —
+ *     the contract string ('unsafe-inline' alone) would strip ALL base
+ *     styling from every blog. Safe because the same-origin namespace is
+ *     fully platform-controlled: public/ holds only first-party files (no
+ *     user-supplied content is ever served from /css or /js) and every
+ *     WORKER response carries nosniff with a non-CSS Content-Type, so no
+ *     attacker-influenced same-origin bytes are loadable as a stylesheet.
+ *     (NOTE: Static Assets responses bypass the Worker and carry NO security
+ *     headers — never lean on assets themselves having nosniff.)
+ *
+ *   - base-uri 'none' + form-action 'none' appended (P7 review fix): neither
+ *     directive falls back to default-src, and blog pages are the ones
+ *     rendering hostile relay content. The sanitizer already drops
+ *     <base>/<form>, but it must not be the ONLY line of defense — a
+ *     sanitizer regression letting through <base href> would rewrite every
+ *     relative URL, and <form action> would harvest input, both silently.
+ *     Blog markup legitimately ships neither element, so nothing breaks.
  */
 export const BLOG_CSP =
-  "default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; media-src *";
+  "default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; " +
+  "media-src *; base-uri 'none'; form-action 'none'";
 
 /**
  * Apex-class CSP — as tight as the pages' real needs allow (derived from

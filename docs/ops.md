@@ -13,7 +13,7 @@ every Worker response is stamped — guard 404s (unknown/spoofed hosts), tenant
 
 | Class | Applies to | CSP | Extra |
 | ----- | ---------- | --- | ----- |
-| **Blog** | `<handle>.nostrbook.net` (all paths) AND apex `/npub1…` views | `default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; media-src *` | no XFO (blogs stay embeddable) |
+| **Blog** | `<handle>.nostrbook.net` (all paths) AND apex `/npub1…` views | `default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; media-src *; base-uri 'none'; form-action 'none'` | no XFO (embeddable **by design** — see notes) |
 | **Apex** | everything else on `nostrbook.net` (+ unknown-host 404s) | `default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src * data:; media-src *; connect-src 'self' wss:; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` | `X-Frame-Options: DENY` |
 
 Both classes always send `X-Content-Type-Options: nosniff` and
@@ -26,6 +26,20 @@ Notes:
   (`test/integration/headers.spec.ts` asserts no `<script` in blog markup).
 - Blog `style-src` carries `'self'` (the shared `/css/style.css` base
   stylesheet) + `'unsafe-inline'` (the sanitized per-blog theme `<style>`).
+  `'self'` is safe because the same-origin namespace is fully
+  platform-controlled: `public/` holds only first-party files and every
+  **Worker** response carries nosniff with a non-CSS Content-Type, so no
+  attacker-influenced same-origin bytes are loadable as a stylesheet.
+- Blog `base-uri 'none'; form-action 'none'` (neither falls back to
+  `default-src`): blog pages render hostile relay content, and the sanitizer
+  (which drops `<base>`/`<form>`) must not be the only line of defense
+  against `<base href>` link rewriting / `<form action>` input harvesting.
+  Blog markup ships neither element, so the pins cost nothing.
+- **Blogs are frameable by design** (no XFO / `frame-ancestors` on the blog
+  class; the contract mandates XFO on the apex only): blog pages are JS-free,
+  read-only, carry no session (`sid` is host-only on the apex) and no
+  state-changing UI, so framing yields at most link-click redressing —
+  accepted in exchange for embeddability.
 - Apex needs: same-origin JS (`login.js`, `editor.js`), the **Turnstile**
   script + iframe (`challenges.cloudflare.com` — the only third-party origin
   in the product), `connect-src 'self' wss:` (login/preview/mirror fetches +
@@ -63,7 +77,7 @@ abuse bounds, not politeness.
 | `GET /dashboard/posts/new`, `GET /dashboard/editor` | session | — | 1–2 row reads |
 | `POST /dashboard/claim` | `claim:ip` → 3/h + Turnstile + blocked gate | — | reserved-handle read + upsert |
 | `POST /dashboard/settings` | `settings:pk` → 20/5min + blocked gate | — | D1 write; KV gen bump **only when css/about changed** |
-| `POST /dashboard/preview` | `preview:pk` → 60/5min + `Content-Length` ≤ 400 KB (required) | `no-store` | renderPost on the request path (authed only, budgeted) |
+| `POST /dashboard/preview` | `preview:pk` → 60/5min + `Content-Length` ≤ 400 KB (required) + blocked gate *(P7)* | `no-store` | renderPost on the request path (authed only, budgeted) |
 | `POST /api/mirror` | `mirror:pk` → 30/5min + `Content-Length` ≤ 2 MB (required) + `MAX_POSTS_PER_PUBKEY` 1000 + blocked gate | — | schnorr + render-at-ingest + D1/FTS writes + 1 KV gen bump |
 | `GET /discover` | `discover:ip` → 60/min **on cache miss only** | Cache API per clamped page (≤50 keys), TTL 300s, 200s only | miss: joined feed query (≤ ~1k rows at page 50); hit: zero D1/KV |
 | `GET /search` | `search:ip` → 30/min (non-empty `q` only) | — | FTS MATCH (sanitized) + join, LIMIT 20 |
@@ -105,19 +119,44 @@ are ordinary gen bumps.
 Application-level limits above bound *single-source* abuse; the WAF is the
 *distributed/volumetric* backstop (and keeps scanner noise off the Worker
 entirely — every blocked request saves Worker invocations and D1 writes).
-Both rules are free-plan features; configure once after Gate B:
+Rate-limiting rules and custom rules are both free-plan features, **but the
+free plan gates which expression fields/functions are available, and the
+exact set varies by account — verify the expressions below against the live
+zone at Gate B step 7 and fall back as documented if the dashboard rejects
+them.** Configure once after Gate B:
 
 ### 3a. Zone rate-limiting rule (Security → WAF → Rate limiting rules)
 
 - **Rule name**: `global-per-ip-throttle`
-- **If incoming requests match**: Custom expression
-  `(http.host eq "nostrbook.net") or (http.host wildcard "*.nostrbook.net")`
+- **If incoming requests match**: preferred expression
+  `(http.host eq "nostrbook.net") or (http.host wildcard "*.nostrbook.net")`.
+  **Free-plan caveat**: rate-limiting rule expressions restrict the field set
+  (`http.host` and the `wildcard` operator are plan-gated on some accounts).
+  If the dashboard rejects it, use the guaranteed-configurable fallback: the
+  zone serves ONLY this Worker, so an all-traffic match is equivalent — use
+  a URI-path match (e.g. `(http.request.uri.path wildcard "*")`) or the
+  dashboard's default "all incoming requests" scope. Do NOT skip the rule or
+  improvise a narrower scope: the budget math in §2/§4 leans on this
+  backstop.
 - **With the same characteristics**: IP (free plan default)
-- **When rate exceeds**: **300 requests / 10 seconds** (the free plan fixes
-  the counting period at 10s; 30 rps/IP is far above any human browsing
-  pattern and above the busiest app-level limiter)
+- **When rate exceeds**: **60 requests / 10 seconds** (the free plan fixes
+  the counting period at 10s). Zone requests per page view are small — the
+  document plus a couple of same-origin assets; post images/media load from
+  external origins — so 6 rps sustained is far above human browsing. Shared
+  NAT (CGNAT) bursts may occasionally trip it; mitigation lasts only 10s.
 - **Then take action**: **Block**
 - **For duration**: 10 seconds (free-plan mitigation timeout)
+- **Why 60, and when to tighten**: the WAF is the ONLY control over the
+  per-request baseline reads that cannot be metered app-side without
+  spending scarcer D1 writes — 1 KV read per apex request bearing a
+  well-shaped `sid` cookie (session resolution), 1 KV gen read per
+  blog-subdomain request, 1–2 D1 rows per tenant / `nostr.json` lookup.
+  Even at 60/10s one IP can sustain ~518k req/day, which still out-runs the
+  100k/day KV-read budget — the rule bounds the burn *rate*; it does not
+  make exhaustion impossible. **Pre-planned escalation**: on KV-read or
+  D1-rows-read exhaustion symptoms (§4), tighten the threshold to
+  **10 requests / 10 seconds** until the offender is identified and
+  WAF-blocked (by IP/ASN), then restore.
 
 ### 3b. Scanner-path block (Security → WAF → Custom rules)
 
@@ -131,18 +170,29 @@ Both rules are free-plan features; configure once after Gate B:
   ```
 
 - **Action**: **Block**
+- **Free-plan caveat**: `ends_with()`/`starts_with()` availability is
+  plan-gated on some accounts. If the expression editor rejects them, the
+  `contains` operator (available on all plans) is an acceptable, slightly
+  broader fallback:
+
+  ```
+  (http.request.uri.path contains ".php")
+  or (http.request.uri.path contains "/wp-")
+  or (http.request.uri.path contains "/.env")
+  ```
 
 Known trade-off: a blog post whose d-tag slug ends in `.php` or starts with
-`wp-` becomes unreachable at the edge. Acceptable; authors control their
-slugs and the editor's slugify never mints such shapes.
+`wp-` (or, under the fallback, merely *contains* those strings) becomes
+unreachable at the edge. Acceptable; authors control their slugs and the
+editor's slugify never mints such shapes.
 
 ## 4. Incident notes: free-tier budget exhaustion
 
 | Budget | Daily quota | Exhaustion symptoms | Response |
 | ------ | ----------- | ------------------- | -------- |
 | **KV writes** | 1,000 | New logins 500 (session put fails); `POST /api/mirror` / settings saves error after the D1 write (gen bump throws) → blogs serve **stale cached pages** until TTL; admin block can't invalidate caches (block still 404s live traffic — the tenant check precedes the cache) | `wrangler tail` to find the writer; block the offending key via `/admin`; verify the write classes above — anything else writing KV is a bug. Quota resets daily (UTC) |
-| **KV reads** | 100,000 | Session resolution fails → authed pages 500; blog-page gen reads are try/caught → blogs **degrade to uncached serving** (D1 load rises but pages stay up) | WAF-tighten the hot path (subdomain hosts or `/dashboard`); consider lowering the zone rate rule threshold temporarily |
-| **D1 rows read** | 5,000,000 | Feed/blog/search queries error → 500s on misses (cached pages keep serving); `/search` shows its distinct 503 "temporarily unavailable" page | Identify the hot key/IP via `rate_limits` (`SELECT * FROM rate_limits ORDER BY count DESC LIMIT 20`); WAF-block; cached + rate-limited paths (P6/P7) make this hard to reach without distribution |
+| **KV reads** | 100,000 | Session resolution fails → authed pages 500 (`/admin` included); blog-page gen reads are try/caught → blogs **degrade to uncached serving** (D1 load rises but pages stay up). **A single IP inside the WAF allowance can reach this** — every apex request with a well-shaped `sid` cookie costs 1 KV read; the app cannot meter it without D1 writes (§3a) | WAF-block the offending IP; apply the §3a pre-planned escalation (tighten to 10/10s); quota resets daily (UTC) |
+| **D1 rows read** | 5,000,000 | Feed/search queries error; **every blog request 500s — cache hits included** (the tenant lookup is an unguarded D1 read that runs BEFORE the blog cache; deliberate — failing open there would serve blocked users during outages); `/discover` **cache hits keep serving**; `/search` shows its distinct 503 "temporarily unavailable" page | Identify the hot key/IP via `rate_limits` (`SELECT * FROM rate_limits ORDER BY count DESC LIMIT 20`); WAF-block; apply the §3a escalation. Cached + rate-limited paths (P6/P7) close the *bulk*-read routes, but the uncached 1–2-row paths (tenant lookups, slug-404 probes, `nostr.json`) let one or two IPs inside the WAF allowance grind through this budget |
 | **D1 rows written** | 100,000 | **All limiters fail CLOSED** → 429s on challenge/login/discover-miss/search/npub/mirror; nonce issuance fails → logins stop | This is the deliberate fail-safe posture: the platform read paths (cached blogs, discover hits) keep serving. WAF-block the source; wait for reset |
 | **Cache API** | best-effort | All cache layers degrade to uncached (every layer is try/caught) → D1/CPU load rises, correctness unchanged | Watch D1 budgets (above); usually transient |
 | **Worker requests** | 100,000/day | Cloudflare serves errors once exceeded | WAF rate rule is the main dial; scanner-path block cuts the noise floor |
@@ -171,7 +221,12 @@ only — denials themselves are silent 4xxs by design).
     unknown) — the platform stops vouching for the identity the moment the
     block lands;
   - writes refuse: `POST /api/mirror`, `/dashboard/settings`,
-    `/dashboard/claim` → 403.
+    `/dashboard/claim` → 403;
+  - `POST /dashboard/preview` refuses too (403) — the one endpoint allowed
+    to run renderPost on the request path; blocked identities must not spend
+    request-path CPU. The dashboard GET pages deliberately STAY reachable so
+    a blocked user can see the state of their account (reads are cheap and
+    rate-limited; nothing persists).
 - **Unblock** restores everything (fresh gen bump ⇒ no stale pre-block
   cache).
 - Admin actions are CSRF-protected (same-origin proof) and rate-limited
@@ -227,6 +282,12 @@ see the manual-check notes at the bottom of `scripts/smoke.sh`).
 1. **DNS** (per `docs/setup.md` §2): apex `A @ 192.0.2.1` **Proxied** +
    wildcard `CNAME * nostrbook.net` **Proxied**. SSL/TLS **Full (strict)**;
    confirm Universal SSL covers `nostrbook.net` + `*.nostrbook.net`.
+   Then, under SSL/TLS → **Edge Certificates**: enable **Always Use HTTPS**
+   and **HSTS** with `max-age` ≥ 6 months (15552000). Sessions are Secure
+   host-only cookies on the apex; without zone HSTS a first-visit `http://`
+   navigation is interceptable before the 301. Hold off
+   `includeSubDomains`/preload until tenant subdomains are confirmed stable
+   on TLS (a preloaded broken wildcard is unrecoverable for months).
 2. **Deploy the committed config** (restores `MAIN_HOST=nostrbook.net`):
 
    ```sh
@@ -250,7 +311,11 @@ see the manual-check notes at the bottom of `scripts/smoke.sh`).
    `https://<handle>.nostrbook.net/` renders the relay content, RSS
    validates, and `https://nostrbook.net/.well-known/nostr.json?name=<handle>`
    answers.
-7. **WAF**: configure §3 (rate rule + scanner-path block).
+7. **WAF**: configure §3 (rate rule + scanner-path block). The preferred
+   expressions use fields/functions whose free-plan availability varies by
+   account (`http.host`, `wildcard`, `ends_with`/`starts_with`) — if the
+   dashboard rejects them, apply the documented fallbacks in §3a/§3b rather
+   than skipping the rule.
 
 Rollback: `wrangler deployments list` + `wrangler rollback` restore the
 previous Worker version; DNS records can stay (the guard 404s anything it

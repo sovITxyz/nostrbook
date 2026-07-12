@@ -483,6 +483,15 @@ dashboardRoutes.post("/preview", async (c) => {
     return c.json({ error: "rate limited, try again later" }, 429);
   }
 
+  // Blocked keys keep read access to the dashboard (so they can SEE they are
+  // blocked) but must not spend request-path renderPost CPU — preview is the
+  // one endpoint allowed to run the markdown pipeline per request, so it gets
+  // the same blocked gate as the write routes (P7 review fix).
+  const user = await getUserByPubkey(c.env, sess.pubkey);
+  if (user?.blocked) {
+    return c.json({ error: "account blocked" }, 403);
+  }
+
   let markdown = "";
   try {
     const body: unknown = await c.req.json();

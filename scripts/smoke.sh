@@ -215,6 +215,9 @@ check_header_contains "apex CSP is the apex class" "content-security-policy: def
 # img-src (no script-src at all — blog pages are JS-free by policy).
 check "npub headers probe is 404" 404 "$MAIN_HOST" "/npub1$(printf 'z%.0s' $(seq 1 58))"
 check_header_contains "npub view carries the blog-class CSP" "content-security-policy: default-src 'none'; img-src"
+# Review fix: the blog class pins base-uri AND form-action (apex pins
+# base-uri 'none' too, but form-action 'self' — this pair is blog-only).
+check_header_contains "blog CSP pins base-uri + form-action" "base-uri 'none'; form-action 'none'"
 check_header_contains "npub 404 still sends nosniff" "x-content-type-options: nosniff"
 if [[ "$SUBDOMAINS" == 1 ]]; then
   check "unknown subdomain headers probe is 404" 404 "unknown.$MAIN_HOST" "/"

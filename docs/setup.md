@@ -11,6 +11,10 @@ here is needed for local dev or CI; local D1/KV are simulated.
 - [ ] SSL/TLS mode: **Full (strict)**.
 - [ ] Edge Certificates: confirm the Universal SSL cert covers `nostrbook.net`
       and `*.nostrbook.net` (universal certs include the first-level wildcard).
+- [ ] Edge Certificates (at Gate B, once TLS is confirmed working): enable
+      **Always Use HTTPS** + **HSTS** (`max-age` ≥ 6 months; hold
+      `includeSubDomains`/preload until tenant subdomains are confirmed stable
+      on TLS — see `docs/ops.md` §6 Gate B step 1).
 
 ## 2. DNS records
 

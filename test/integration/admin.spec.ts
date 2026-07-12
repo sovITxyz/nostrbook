@@ -278,6 +278,19 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     );
     expect(settings.status).toBe(403);
 
+    // …the server-rendered preview (P7 review fix: the one endpoint allowed
+    // to run renderPost on the request path refuses blocked keys — blocked
+    // identities must not spend request-path CPU)…
+    const preview = await SELF.fetch(
+      "https://nostrbook.net/dashboard/preview",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: aliceCookie },
+        body: JSON.stringify({ markdown: "# nope" }),
+      },
+    );
+    expect(preview.status).toBe(403);
+
     // …and claim (P4 gate — alice already holds a handle, but the blocked
     // check fires first and hides even the "already claimed" signal).
     const claim = await SELF.fetch("https://nostrbook.net/dashboard/claim", {
@@ -299,6 +312,17 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     const restored = await SELF.fetch("https://alice.nostrbook.net/");
     expect(restored.status).toBe(200);
     expect(await restored.text()).toContain("Hello world");
+
+    // Preview works again post-unblock (blocked gate, not a lingering state).
+    const previewRestored = await SELF.fetch(
+      "https://nostrbook.net/dashboard/preview",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: aliceCookie },
+        body: JSON.stringify({ markdown: "# back" }),
+      },
+    );
+    expect(previewRestored.status).toBe(200);
 
     const nip05Restored = await SELF.fetch(
       "https://nostrbook.net/.well-known/nostr.json?name=alice",
@@ -365,5 +389,59 @@ describe("block by npub (mallory, never claimed)", () => {
     const claim2Body = await claim2.text();
     expect(claim2Body).not.toContain("This account is blocked");
     expect(claim2Body).toContain("Human verification failed");
+  });
+});
+
+describe("block by handle that starts with npub1 (review fix)", () => {
+  // HANDLE_REGEX admits handles like "npub1spam" (2–31 chars; real npubs are
+  // 63 and can never match), and a hostile user can deliberately claim one so
+  // that the admin pasting the handle from the abusive blog URL hits a
+  // "npub does not decode" dead end during an incident. resolveTarget must
+  // fall through to the handle lookup.
+  const CAROL_PK = "c0".repeat(32); // synthetic never-logged-in key
+
+  it("resolves an npub1-prefixed CLAIMED handle through the handle lookup", async () => {
+    await env.DB.prepare(
+      "INSERT INTO users (pubkey, handle, claimed_at) VALUES (?, ?, ?)",
+    )
+      .bind(CAROL_PK, "npub1spam", new Date().toISOString())
+      .run();
+
+    const block = await postAdmin("/admin/block", "npub1spam", {
+      cookie: adminCookie,
+    });
+    expect(block.status).toBe(303);
+    let row = await env.DB.prepare(
+      "SELECT blocked FROM users WHERE pubkey = ?",
+    )
+      .bind(CAROL_PK)
+      .first<{ blocked: number }>();
+    expect(row?.blocked).toBe(1);
+
+    // Unblock resolves through the same fallback.
+    const unblock = await postAdmin("/admin/unblock", "npub1spam", {
+      cookie: adminCookie,
+    });
+    expect(unblock.status).toBe(303);
+    row = await env.DB.prepare("SELECT blocked FROM users WHERE pubkey = ?")
+      .bind(CAROL_PK)
+      .first<{ blocked: number }>();
+    expect(row?.blocked).toBe(0);
+  });
+
+  it("npub1-prefixed handle-shaped NON-handles report the handle error", async () => {
+    const res = await postAdmin("/admin/block", "npub1nobody", {
+      cookie: adminCookie,
+    });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("No user with that handle");
+  });
+
+  it("full-length undecodable npubs still get the decode error", async () => {
+    const res = await postAdmin("/admin/block", `npub1${"z".repeat(58)}`, {
+      cookie: adminCookie,
+    });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("That npub does not decode");
   });
 });

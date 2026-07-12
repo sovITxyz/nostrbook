@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { DispatchEnv } from "../types";
 import { npubDecode, npubEncode } from "../nostr/nip19";
-import { getUserByHandle } from "../services/users";
+import { getUserByHandle, HANDLE_REGEX } from "../services/users";
 import { bumpGen } from "../services/mirror";
 import { rateLimitAllows } from "../services/ratelimit";
 import { AdminPage, type BlockedEntry } from "../views/main/admin";
@@ -26,7 +26,9 @@ import { AdminPage, type BlockedEntry } from "../views/main/admin";
  *   - resolveNpub 404s the apex /npub1… views;
  *   - discover + search JOIN on blocked = 0 (cached /discover pages age out
  *     within DISCOVER_CACHE_SECONDS = 300s);
- *   - POST /api/mirror, /dashboard/settings, /dashboard/claim refuse (403);
+ *   - POST /api/mirror, /dashboard/settings, /dashboard/claim refuse (403),
+ *     and so does POST /dashboard/preview — the one endpoint allowed to run
+ *     renderPost on the request path (blocked keys must not spend that CPU);
  *   - NIP-05: /.well-known/nostr.json returns {"names":{}} for blocked
  *     handles — DECIDED policy: blocked users are dropped from nostr.json
  *     entirely, so the platform stops vouching for the identity the moment
@@ -123,7 +125,16 @@ async function resolveTarget(
     try {
       return { pubkey: npubDecode(target) };
     } catch {
-      return { error: "That npub does not decode." };
+      // Not a decodable npub — but HANDLE_REGEX admits short handles that
+      // START with "npub1" (e.g. "npub1spam"; ≤31 chars, real npubs are 63
+      // and can never match), and a hostile user can deliberately claim one
+      // so that pasting their handle here misroutes to a decode error during
+      // an abuse incident (P7 review fix). Fall through to the handle lookup
+      // whenever the input is handle-shaped; only true npub shapes keep the
+      // decode error.
+      if (!HANDLE_REGEX.test(target)) {
+        return { error: "That npub does not decode." };
+      }
     }
   }
   if (PUBKEY_HEX.test(target.toLowerCase())) {
