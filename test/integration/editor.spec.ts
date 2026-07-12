@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fixtures from "../fixtures/events.json";
 import {
   ALICE_PK,
+  BOB_PK,
   MALLORY_SK,
   resetMirrorState,
   resetRateLimits,
@@ -129,6 +130,55 @@ describe("POST /api/mirror — auth gates", () => {
       .bind(aliceHello.id)
       .first();
     expect(row).toBeNull();
+  });
+
+  it("rate limits mirror writes per pubkey (429, nothing stored)", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    // Pre-fill the current fixed window to the cap (MIRROR_MAX = 30/5min,
+    // src/routes/api.ts) instead of looping 31 real requests.
+    const now = Math.floor(Date.now() / 1000);
+    await env.DB.prepare(
+      "INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)",
+    )
+      .bind(`mirror:pk:${ALICE_PK}`, 30, now - (now % 300))
+      .run();
+    const res = await postMirror(aliceHello, { Cookie: cookie });
+    expect(res.status).toBe(429);
+    const row = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+      .bind(aliceHello.id)
+      .first();
+    expect(row).toBeNull();
+  });
+
+  it("an alice-signed kind 5 addressing BOB's post cannot hide it", async () => {
+    // Bob's post arrives through the normal sync path and his blog is live.
+    await mirrorEvent(env, bobFirst);
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO users (pubkey, handle, claimed_at) VALUES (?, 'bob', ?)",
+    )
+      .bind(BOB_PK, new Date().toISOString())
+      .run();
+
+    // Alice signs the delete HERSELF (so the pubkey gate passes) but points
+    // its e/a tags at bob's post — applyDelete must scope every side effect
+    // to the signer's own rows.
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const hostile = signDeleteEvent({
+      eventId: bobFirst.id,
+      address: `30023:${BOB_PK}:bob-first`,
+      created_at: bobFirst.created_at + 100,
+    }); // default sk = alice
+    const res = await postMirror(hostile, { Cookie: cookie });
+    expect(res.status).toBe(200); // accepted: it IS alice's own signed event
+
+    const row = await env.DB.prepare(
+      "SELECT deleted FROM events WHERE id = ?",
+    )
+      .bind(bobFirst.id)
+      .first<{ deleted: number }>();
+    expect(row!.deleted).toBe(0); // bob's row untouched
+    const page = await SELF.fetch("https://bob.nostrbook.net/bob-first");
+    expect(page.status).toBe(200); // and his blog still serves it
   });
 });
 
@@ -288,9 +338,20 @@ describe("POST /dashboard/preview — parity with the publish pipeline", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects a cross-origin preview (CSRF, 403)", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const res = await postPreview("# hi", {
+      Cookie: cookie,
+      Origin: "https://evil.example",
+    });
+    expect(res.status).toBe(403);
+  });
+
   it("preview HTML === published (ingest-rendered) HTML, byte for byte", async () => {
     const cookie = await sessionCookieFor(ALICE_PK);
-    for (const post of [aliceHello, aliceTorture]) {
+    // aliceXss included on purpose: parity must hold for hostile markdown
+    // too, or the preview would lie about what publishing produces.
+    for (const post of [aliceHello, aliceTorture, aliceXss]) {
       await mirrorEvent(env, post);
       const stored = await env.DB.prepare(
         "SELECT rendered FROM events WHERE id = ?",
