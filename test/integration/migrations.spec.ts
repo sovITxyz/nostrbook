@@ -104,3 +104,30 @@ describe("migrations/0003_login_nonces.sql", () => {
     ).rejects.toThrow(/UNIQUE|PRIMARY/);
   });
 });
+
+describe("migrations/0004_delete_horizons.sql", () => {
+  it("creates delete_horizons and the MAX-keeping upsert works", async () => {
+    const table = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='delete_horizons'",
+    ).first<{ name: string }>();
+    expect(table?.name).toBe("delete_horizons");
+
+    // The exact upsert applyDelete issues: the horizon only ever RISES —
+    // a replayed older delete must not lower a stored newer horizon.
+    const upsert = (deletedAt: number) =>
+      env.DB.prepare(
+        `INSERT INTO delete_horizons (address, deleted_at) VALUES (?, ?)
+         ON CONFLICT(address) DO UPDATE SET
+           deleted_at = MAX(delete_horizons.deleted_at, excluded.deleted_at)`,
+      ).bind("30023:pk-test:slug", deletedAt);
+    await upsert(100).run();
+    await upsert(200).run(); // newer delete raises the horizon
+    await upsert(150).run(); // older replay must NOT lower it
+    const row = await env.DB.prepare(
+      "SELECT deleted_at FROM delete_horizons WHERE address = ?",
+    )
+      .bind("30023:pk-test:slug")
+      .first<{ deleted_at: number }>();
+    expect(row?.deleted_at).toBe(200);
+  });
+});

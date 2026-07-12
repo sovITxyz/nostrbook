@@ -7,10 +7,12 @@ import fixtures from "../fixtures/events.json";
 import {
   ALICE_PK,
   BOB_PK,
+  MALLORY_PK,
   MALLORY_SK,
   resetMirrorState,
   resetRateLimits,
   seedAlice,
+  seedBlockedMallory,
   sessionCookieFor,
   signDeleteEvent,
   signPostEvent,
@@ -18,6 +20,7 @@ import {
 } from "../helpers";
 import type { NostrEvent } from "../../src/nostr/event";
 import { mirrorEvent } from "../../src/services/mirror";
+import { MAX_POSTS_PER_PUBKEY } from "../../src/routes/api";
 
 const aliceHello = fixtures.posts.aliceHello as NostrEvent;
 const aliceHelloEdit = fixtures.extras.aliceHelloEdit as NostrEvent;
@@ -369,5 +372,187 @@ describe("POST /dashboard/preview — parity with the publish pipeline", () => {
     const res = await postPreview(aliceXss.content, { Cookie: cookie });
     const html = await res.text();
     expect(findXssVectors(html, "fragment")).toEqual([]);
+  });
+});
+
+// --- P5 review fixes -------------------------------------------------------------
+
+describe("POST /api/mirror — review-fix hardening", () => {
+  it("rejects a blocked user's publish (403) and stores nothing", async () => {
+    await seedBlockedMallory();
+    const cookie = await sessionCookieFor(MALLORY_PK); // live session, blocked key
+    const post = signPostEvent({
+      sk: MALLORY_SK,
+      d: "blocked-post",
+      title: "Still here?",
+      content: "blocked keys must not write",
+      created_at: 1_700_010_000,
+    });
+    const res = await postMirror(post, { Cookie: cookie });
+    expect(res.status).toBe(403);
+    const row = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+      .bind(post.id)
+      .first();
+    expect(row).toBeNull();
+  });
+
+  it("rejects a body without Content-Length (413) instead of buffering it", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    // A streaming body has no Content-Length — exactly the chunked-transfer
+    // shape that used to slip past the `Number(undefined ?? "0") === 0` cap.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(aliceHello)));
+        controller.close();
+      },
+    });
+    const res = await SELF.fetch("https://nostrbook.net/api/mirror", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "203.0.113.55",
+        Cookie: cookie,
+      },
+      body,
+    });
+    expect(res.status).toBe(413);
+    const row = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+      .bind(aliceHello.id)
+      .first();
+    expect(row).toBeNull();
+  });
+
+  it("refuses a NEW post slot past the per-pubkey cap but allows edits", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    expect((await postMirror(aliceHello, { Cookie: cookie })).status).toBe(200);
+    // Fill the remaining live-post budget with synthetic rows (one recursive
+    // CTE insert, no crypto) — the cap counts stored rows, not signatures.
+    await env.DB.prepare(
+      `WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < ?1)
+       INSERT INTO events (id, pubkey, kind, d_tag, created_at, content, tags, sig, raw, deleted, rendered)
+       SELECT 'cap-seed-' || n, ?2, 30023, 'cap-seed-' || n, 1600000000 + n, '', '[]', 'x', '{}', 0, ''
+       FROM seq`,
+    )
+      .bind(MAX_POSTS_PER_PUBKEY - 1, ALICE_PK)
+      .run();
+
+    // A new d-tag would be slot number cap+1 → refused, nothing stored.
+    const res = await postMirror(aliceTorture, { Cookie: cookie });
+    expect(res.status).toBe(403);
+    const stored = await env.DB.prepare("SELECT 1 FROM events WHERE id = ?")
+      .bind(aliceTorture.id)
+      .first();
+    expect(stored).toBeNull();
+
+    // An EDIT of an existing slot is never blocked by the cap.
+    const edit = await postMirror(aliceHelloEdit, { Cookie: cookie });
+    expect(edit.status).toBe(200);
+    expect(await edit.json()).toEqual({ result: "stored" });
+  });
+
+  it("serial deletes keep earlier horizons — a late intermediate edit stays hidden", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const t0 = aliceHello.created_at;
+    expect((await postMirror(aliceHello, { Cookie: cookie })).status).toBe(200);
+    const postB = signPostEvent({
+      d: "post-b",
+      title: "Post B",
+      content: "post b body",
+      created_at: t0 + 10,
+    });
+    expect((await postMirror(postB, { Cookie: cookie })).status).toBe(200);
+
+    // Delete A, then B. Kind 5 is not parameterized-replaceable, so B's
+    // marker REPLACES A's in the single (pubkey, 5, '') slot — the exact
+    // churn that used to erase A's delete horizon.
+    const delA = signDeleteEvent({
+      eventId: aliceHello.id,
+      address: `30023:${ALICE_PK}:hello-world`,
+      created_at: t0 + 100,
+    });
+    const delB = signDeleteEvent({
+      eventId: postB.id,
+      address: `30023:${ALICE_PK}:post-b`,
+      created_at: t0 + 200,
+    });
+    expect((await postMirror(delA, { Cookie: cookie })).status).toBe(200);
+    expect((await postMirror(delB, { Cookie: cookie })).status).toBe(200);
+    const markers = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM events WHERE pubkey = ? AND kind = 5",
+    )
+      .bind(ALICE_PK)
+      .first<{ n: number }>();
+    expect(markers?.n).toBe(1); // one slot row — yet BOTH horizons must hold
+
+    // Late-arriving intermediate edit of A: signed BETWEEN A's stored version
+    // and A's delete (made in another client, delivered late by a relay).
+    const lateEdit = signPostEvent({
+      d: "hello-world",
+      title: "Hello again",
+      content: "resurrected?",
+      created_at: t0 + 50,
+    });
+    const res = await postMirror(lateEdit, { Cookie: cookie });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ result: "stored" }); // stored, but tombstoned
+
+    const row = await env.DB.prepare(
+      "SELECT deleted FROM events WHERE id = ?",
+    )
+      .bind(lateEdit.id)
+      .first<{ deleted: number }>();
+    expect(row?.deleted).toBe(1);
+    expect(
+      (await SELF.fetch("https://alice.nostrbook.net/hello-world")).status,
+    ).toBe(404);
+  });
+});
+
+describe("editor pages — review-fix hardening", () => {
+  it("a post whose d-tag is literally 'new' is editable (query-param route)", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const post = signPostEvent({
+      d: "new", // what slugify mints from the title "New"
+      title: "New",
+      content: "the slug is new",
+      created_at: 1_700_020_000,
+    });
+    expect((await postMirror(post, { Cookie: cookie })).status).toBe(200);
+
+    const res = await SELF.fetch(
+      "https://nostrbook.net/dashboard/editor?slug=new",
+      { headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Edit post");
+    expect(html).toContain("the slug is new");
+
+    // The literal new-post page is untouched by the route move.
+    const blank = await SELF.fetch("https://nostrbook.net/dashboard/posts/new", {
+      headers: { Cookie: cookie },
+    });
+    expect(blank.status).toBe(200);
+    expect(await blank.text()).toContain("New post");
+  });
+
+  it("the editor content textarea survives a leading-newline round trip", async () => {
+    const post = signPostEvent({
+      d: "leading-newline",
+      title: "Leading newline",
+      content: "\nfirst line after a blank",
+      created_at: 1_700_030_000,
+    });
+    await mirrorEvent(env, post);
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const res = await SELF.fetch(
+      "https://nostrbook.net/dashboard/editor?slug=leading-newline",
+      { headers: { Cookie: cookie } },
+    );
+    const html = await res.text();
+    // The textarea must carry a protective "\n" + content: the HTML parser
+    // eats exactly one newline after <textarea>, so the browser's DOM value
+    // equals the stored content and republish keeps the same bytes.
+    expect(html).toContain(">\n\nfirst line after a blank</textarea>");
   });
 });

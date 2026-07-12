@@ -37,7 +37,7 @@ const MAX_MIRROR_BODY_BYTES = 2_000_000;
  * always allowed; only NEW slots past the cap are refused. Generous for a real
  * blog; a bound, not a quota.
  */
-const MAX_POSTS_PER_PUBKEY = 1_000;
+export const MAX_POSTS_PER_PUBKEY = 1_000;
 
 /**
  * POST /api/mirror — mirror a signed event for the LOGGED-IN key.

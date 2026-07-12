@@ -75,6 +75,22 @@ export function serveEvents(events: NostrEvent[]): void {
   setSocketFactoryForTests(() => mockRelaySocket(events));
 }
 
+/**
+ * Serve a DIFFERENT event set per relay URL (URLs not listed serve nothing),
+ * recording every URL the pool dials into `dialed`. Used by the P5 review-fix
+ * test proving cron sync fetches from the user's configured relays
+ * (settings.relays), not just the global RELAYS list.
+ */
+export function serveEventsByUrl(
+  byUrl: Record<string, NostrEvent[]>,
+  dialed?: string[],
+): void {
+  setSocketFactoryForTests((url) => {
+    dialed?.push(url);
+    return mockRelaySocket(byUrl[url] ?? []);
+  });
+}
+
 /** Restore the real WebSocket connector. */
 export function resetMockRelay(): void {
   setSocketFactoryForTests(null);

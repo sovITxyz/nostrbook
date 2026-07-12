@@ -8,14 +8,17 @@ import fixtures from "../fixtures/events.json";
 import {
   ALICE_PK,
   BOB_PK,
+  MALLORY_PK,
   resetMirrorState,
   resetRateLimits,
   resetUsers,
   seedAlice,
+  seedBlockedMallory,
   sessionCookieFor,
 } from "../helpers";
 import type { NostrEvent } from "../../src/nostr/event";
 import { mirrorEvent } from "../../src/services/mirror";
+import { SETTINGS_MAX } from "../../src/routes/dashboard";
 
 const aliceHello = fixtures.posts.aliceHello as NostrEvent;
 
@@ -224,5 +227,89 @@ describe("GET /dashboard — post list + settings form", () => {
     expect(html).toContain("body { color: teal }");
     expect(html).toContain("hello about");
     expect(html).toContain("wss://nos.lol/");
+  });
+});
+
+// --- P5 review fixes -------------------------------------------------------------
+
+describe("POST /dashboard/settings — review-fix hardening", () => {
+  it(`rate limits saves (429 after ${SETTINGS_MAX} in the window)`, async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    for (let i = 0; i < SETTINGS_MAX; i++) {
+      const res = await postSettings(
+        { css: "", about: `v${i}`, relays: "" },
+        { Cookie: cookie },
+      );
+      expect(res.status, `save ${i + 1}`).toBe(303);
+    }
+    const res = await postSettings(
+      { css: "", about: "over the limit", relays: "" },
+      { Cookie: cookie },
+    );
+    expect(res.status).toBe(429);
+    // The over-limit save persisted nothing.
+    const settings = await settingsRow(ALICE_PK);
+    expect(settings.about).toBe(`v${SETTINGS_MAX - 1}`);
+  });
+
+  it("rejects a blocked user's save (403, nothing persisted)", async () => {
+    await seedBlockedMallory();
+    const cookie = await sessionCookieFor(MALLORY_PK); // live session, blocked key
+    const res = await postSettings(
+      { css: "body{}", about: "still here?", relays: "" },
+      { Cookie: cookie },
+    );
+    expect(res.status).toBe(403);
+    const settings = await settingsRow(MALLORY_PK);
+    expect(settings.about).toBeUndefined();
+  });
+
+  it("a no-op save and a relays-only change cost zero KV gen bumps", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    await postSettings(
+      { css: "body { color: teal }", about: "hi", relays: "" },
+      { Cookie: cookie },
+    );
+    const gen = await env.KV.get(`gen:${ALICE_PK}`);
+    expect(gen).not.toBeNull(); // first save changed css/about → bumped
+
+    // Byte-identical save: no bump (KV writes are the scarce resource).
+    await postSettings(
+      { css: "body { color: teal }", about: "hi", relays: "" },
+      { Cookie: cookie },
+    );
+    expect(await env.KV.get(`gen:${ALICE_PK}`)).toBe(gen);
+
+    // Relays-only change: persisted, but relays never render on the blog —
+    // still no bump.
+    const res = await postSettings(
+      { css: "body { color: teal }", about: "hi", relays: "wss://nos.lol" },
+      { Cookie: cookie },
+    );
+    expect(res.status).toBe(303);
+    expect(await env.KV.get(`gen:${ALICE_PK}`)).toBe(gen);
+    const settings = await settingsRow(ALICE_PK);
+    expect(settings.relays).toEqual(["wss://nos.lol/"]);
+  });
+
+  it("the saved about text reaches the blog and overrides the profile bio", async () => {
+    await mirrorEvent(env, aliceHello);
+    await mirrorEvent(env, fixtures.profiles.alice as NostrEvent); // kind 0 carries its own about
+    const cookie = await sessionCookieFor(ALICE_PK);
+    await postSettings(
+      { css: "", about: "about from settings", relays: "" },
+      { Cookie: cookie },
+    );
+
+    for (const path of ["/", "/hello-world"]) {
+      const page = await SELF.fetch(`https://alice.nostrbook.net${path}`);
+      expect(page.status, path).toBe(200);
+      const html = await page.text();
+      expect(html, path).toContain("about from settings");
+      // The kind-0 bio is REPLACED, not shown alongside.
+      expect(html, path).not.toContain(
+        "Nostrbook throwaway test profile (alice)",
+      );
+    }
   });
 });

@@ -52,7 +52,7 @@ const MAX_PREVIEW_BODY_BYTES = 400_000;
  * exhaust the platform-wide free-tier KV write budget (1,000/day), breaking
  * cache invalidation AND new-login session creation for ALL tenants.
  */
-const SETTINGS_MAX = 20;
+export const SETTINGS_MAX = 20;
 const SETTINGS_WINDOW_SECONDS = 5 * 60;
 
 /** Cap on the stored about text (settings form). */
