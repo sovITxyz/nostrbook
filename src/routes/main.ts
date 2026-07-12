@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import type { DispatchEnv } from "../types";
 import { MainHome } from "../views/main/home";
 import { npubDecode } from "../nostr/nip19";
@@ -270,6 +270,40 @@ async function mirrorBudgetAllows(c: Context<DispatchEnv>): Promise<boolean> {
 
 // npub payloads are fixed-size: "npub1" + 52 data chars + 6 checksum chars.
 const NPUB_PARAM = "/:npub{npub1[a-z0-9]{58}}";
+
+// --- npub VIEW limiter (P7 rate-limit review) ---------------------------------
+// The mirror-session budgets above bound RELAY work, but the npub HTML/XML
+// views themselves were unmetered D1 read paths: unlike blog subdomains
+// (edge-cached per gen), every npub page view runs listPostsByPubkey
+// (LIMIT 100 → up to ~100 rows_read) plus profile lookups, so one client
+// could grind through the shared 5M rows_read/day free-tier budget. A per-IP
+// fixed window (D1 rate_limits — zero KV writes, same pattern as
+// discover/search) bounds it; the WAF zone rule (docs/ops.md) is the
+// distributed backstop.
+
+/** Max npub-view requests (any /npub1… path) per IP per window. */
+export const NPUB_VIEW_RATE_MAX = 60;
+/** npub-view rate-limit window (seconds). */
+export const NPUB_VIEW_RATE_WINDOW_SECONDS = 60;
+
+const npubViewLimiter: MiddlewareHandler<DispatchEnv> = async (c, next) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const allowed = await rateLimitAllows(
+    c.env,
+    `npub:ip:${ip}`,
+    NPUB_VIEW_RATE_MAX,
+    NPUB_VIEW_RATE_WINDOW_SECONDS,
+  );
+  if (!allowed) {
+    return c.text("Too many requests — please wait a minute and try again.", 429);
+  }
+  return next();
+};
+
+// One registration covers BOTH the bare npub page and its sub-paths (feeds,
+// post slugs): Hono's `/*` also matches the empty tail. Registering the bare
+// pattern as well would run the limiter twice for home views.
+mainRoutes.use(`${NPUB_PARAM}/*`, npubViewLimiter);
 
 /**
  * Cache API marker that rate-limits relay round-trips per pubkey. Exported

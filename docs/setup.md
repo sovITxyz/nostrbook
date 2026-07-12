@@ -11,6 +11,10 @@ here is needed for local dev or CI; local D1/KV are simulated.
 - [ ] SSL/TLS mode: **Full (strict)**.
 - [ ] Edge Certificates: confirm the Universal SSL cert covers `nostrbook.net`
       and `*.nostrbook.net` (universal certs include the first-level wildcard).
+- [ ] Edge Certificates (at Gate B, once TLS is confirmed working): enable
+      **Always Use HTTPS** + **HSTS** (`max-age` ≥ 6 months; hold
+      `includeSubDomains`/preload until tenant subdomains are confirmed stable
+      on TLS — see `docs/ops.md` §6 Gate B step 1).
 
 ## 2. DNS records
 
@@ -33,11 +37,14 @@ wrangler d1 create nostrbook          # → paste database_id into wrangler.json
 wrangler d1 migrations apply nostrbook --remote
 wrangler kv namespace create KV       # → paste id into wrangler.jsonc
 wrangler secret put TURNSTILE_SECRET_KEY
+wrangler secret put ADMIN_PUBKEY      # OPTIONAL: hex/npub admin identity for /admin
+                                      # (omit → admin surface disabled, all /admin 404)
 ```
 
-- [ ] Create a Turnstile widget (dashboard → Turnstile) for `nostrbook.net`;
-      put the site key in `wrangler.jsonc` `vars.TURNSTILE_SITE_KEY` and the
-      secret via `wrangler secret put`.
+- [ ] Create a Turnstile widget (dashboard → Turnstile) for `nostrbook.net`
+      **plus the workers.dev preview hostname** (Gate A tests the claim flow
+      there); put the site key in `wrangler.jsonc` `vars.TURNSTILE_SITE_KEY`
+      and the secret via `wrangler secret put`.
 - `vars.ENVIRONMENT` is already `"production"` in the committed
   `wrangler.jsonc` (fail closed — deploys never enable the dev-only
   X-Forwarded-Host override). Local dev gets `ENVIRONMENT=development` from
@@ -55,8 +62,15 @@ wrangler secret put TURNSTILE_SECRET_KEY
 - [ ] Tail logs (`wrangler tail`) across one 15-minute boundary to observe a
       cron execution.
 
-## 5. Launch gates (P7 runbook)
+## 5. Launch gates (P7 runbook — full detail in `docs/ops.md` §6)
 
-- Gate A: deploy to the `workers.dev` preview URL; CI + `scripts/smoke.sh` green.
-- Gate B: flip DNS (section 2), re-run smoke against `https://nostrbook.net`,
-  confirm cron observed in logs.
+- Gate A: `wrangler deploy --var MAIN_HOST:nostrbook.<account>.workers.dev`
+  to the `workers.dev` preview URL; CI green +
+  `bash scripts/smoke.sh https://nostrbook.<account>.workers.dev` green
+  (subdomain checks auto-skip on workers.dev).
+- Gate B: flip DNS (section 2), `wrangler deploy` (committed vars), re-run
+  smoke against `https://nostrbook.net`, confirm cron observed in
+  `wrangler tail`, and verify a claimed test blog renders real relay content.
+- Post-launch: configure the WAF rate rule + scanner-path block
+  (`docs/ops.md` §3) and set `ADMIN_PUBKEY` if the blocklist admin is wanted
+  (`docs/ops.md` §5).

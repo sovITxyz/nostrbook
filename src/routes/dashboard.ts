@@ -55,6 +55,17 @@ const MAX_PREVIEW_BODY_BYTES = 400_000;
 export const SETTINGS_MAX = 20;
 const SETTINGS_WINDOW_SECONDS = 5 * 60;
 
+/**
+ * Dashboard VIEW rate limit per pubkey (P7 rate-limit review). GET /dashboard
+ * was the heaviest unmetered authed read: renderDashboard lists up to 100
+ * posts per request, and sessions are permissionless, so a looping key could
+ * grind the shared D1 rows_read budget. 60/5min is invisible to humans (one
+ * load per 5s sustained, including the post-publish redirects) but bounds the
+ * burn; key minting itself is already capped by the global challenge budget.
+ */
+export const DASHBOARD_VIEW_MAX = 60;
+const DASHBOARD_VIEW_WINDOW_SECONDS = 5 * 60;
+
 /** Cap on the stored about text (settings form). */
 const MAX_ABOUT_LENGTH = 1_000;
 
@@ -197,6 +208,17 @@ async function renderDashboard(
 dashboardRoutes.get("/", async (c) => {
   const sess = c.var.session;
   if (!sess) return c.redirect("/login", 302);
+  // Meter the (up to ~100-row) dashboard render — see DASHBOARD_VIEW_MAX.
+  if (
+    !(await rateLimitAllows(
+      c.env,
+      `dash:pk:${sess.pubkey}`,
+      DASHBOARD_VIEW_MAX,
+      DASHBOARD_VIEW_WINDOW_SECONDS,
+    ))
+  ) {
+    return c.text("Too many requests — please wait a moment and reload.", 429);
+  }
   return renderDashboard(
     c,
     sess.pubkey,
@@ -459,6 +481,15 @@ dashboardRoutes.post("/preview", async (c) => {
     ))
   ) {
     return c.json({ error: "rate limited, try again later" }, 429);
+  }
+
+  // Blocked keys keep read access to the dashboard (so they can SEE they are
+  // blocked) but must not spend request-path renderPost CPU — preview is the
+  // one endpoint allowed to run the markdown pipeline per request, so it gets
+  // the same blocked gate as the write routes (P7 review fix).
+  const user = await getUserByPubkey(c.env, sess.pubkey);
+  if (user?.blocked) {
+    return c.json({ error: "account blocked" }, 403);
   }
 
   let markdown = "";

@@ -29,6 +29,8 @@ npm run fixtures       # regenerate committed test fixtures (throwaway keys)
 ```
 
 Deployment/DNS setup: see [docs/setup.md](docs/setup.md).
+Operations (rate limits, WAF, incident notes, deploy gates, blocklist
+admin): see [docs/ops.md](docs/ops.md).
 Phase-by-phase build plan: see [docs/phases/](docs/phases/).
 
 ## License

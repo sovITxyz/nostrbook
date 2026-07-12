@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv, DispatchEnv, Site } from "./types";
+import { securityHeaders } from "./middleware/headers";
 import { guard } from "./middleware/guard";
 import { tenant } from "./middleware/tenant";
 import { cache } from "./middleware/cache";
@@ -10,14 +11,16 @@ import { tenantRoutes } from "./routes/tenant";
 import { apiRoutes } from "./routes/api";
 import { authRoutes } from "./routes/auth";
 import { dashboardRoutes } from "./routes/dashboard";
+import { adminRoutes } from "./routes/admin";
 import { wellknownRoutes } from "./routes/wellknown";
 
 /**
  * App assembly.
  *
- * Outer app: guard (host classes) → tenant (site resolution) → dispatch.
- * Dispatch sub-fetches the main or blog sub-app, injecting the resolved Site
- * into the sub-app's env as `SITE` so handlers can read c.var.site.
+ * Outer app: securityHeaders (stamps every response, wraps everything) →
+ * guard (host classes) → tenant (site resolution) → dispatch. Dispatch
+ * sub-fetches the main or blog sub-app, injecting the resolved Site into the
+ * sub-app's env as `SITE` so handlers can read c.var.site.
  */
 
 /** Copies the injected SITE from env into c.var.site for sub-app handlers. */
@@ -38,6 +41,7 @@ mainApp.use("*", session);
 mainApp.route("/", mainRoutes);
 mainApp.route("/", authRoutes); // /login, /login/challenge, /logout
 mainApp.route("/dashboard", dashboardRoutes);
+mainApp.route("/admin", adminRoutes); // P7 blocklist admin (gated by ADMIN_PUBKEY)
 mainApp.route("/api", apiRoutes);
 mainApp.route("/.well-known", wellknownRoutes);
 
@@ -50,6 +54,10 @@ blogApp.route("/", tenantRoutes);
 // --- Outer app ----------------------------------------------------------------
 export const app = new Hono<AppEnv>();
 
+// Security headers FIRST so they wrap every outcome — including guard 404s
+// (unknown hosts), tenant 404s (unclaimed/blocked subdomains), and cache
+// hits served inside the blog sub-app.
+app.use("*", securityHeaders);
 app.use("*", guard);
 app.use("*", tenant);
 

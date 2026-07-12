@@ -4,6 +4,7 @@ import {
   cloudflareTest,
   readD1Migrations,
 } from "@cloudflare/vitest-pool-workers";
+import keys from "./test/fixtures/keys.json";
 
 export default defineConfig(async () => {
   // Read D1 migrations so every test isolate can apply them (test/apply-migrations.ts).
@@ -28,6 +29,11 @@ export default defineConfig(async () => {
             // CI has no .dev.vars, and the turnstile unit spec asserts the
             // exact form body the default verifier POSTs.
             TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+            // P7 admin surface: bob is the admin persona in tests (a
+            // committed throwaway fixture key). Production gets this via
+            // `wrangler secret put ADMIN_PUBKEY`; wrangler dev leaves it
+            // unset (admin disabled — smoke asserts the 404).
+            ADMIN_PUBKEY: keys.bob.pk,
           },
         },
       }),

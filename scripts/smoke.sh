@@ -50,6 +50,14 @@ else
   MAIN_HOST="$(echo "$TARGET" | sed -E 's#^https?://##; s#/.*$##; s#:.*$##')"
 fi
 
+# Subdomain-host checks cannot run against a workers.dev preview (Gate A):
+# nested subdomains of *.workers.dev have no DNS/TLS. They run locally (via
+# the X-Forwarded-Host override) and against the real zone (Gate B).
+SUBDOMAINS=1
+if [[ "$TARGET" != "local" && "$MAIN_HOST" == *workers.dev ]]; then
+  SUBDOMAINS=0
+fi
+
 PASS=0
 FAIL=0
 
@@ -135,7 +143,11 @@ check "apex / responds 200" 200 "$MAIN_HOST" "/"
 check_body_contains "apex / mentions Nostrbook" "Nostrbook"
 check "apex /healthz responds 200" 200 "$MAIN_HOST" "/healthz"
 check_body_contains "healthz reports ok" '"ok":true'
-check "unclaimed subdomain is 404" 404 "unknown.$MAIN_HOST" "/"
+if [[ "$SUBDOMAINS" == 1 ]]; then
+  check "unclaimed subdomain is 404" 404 "unknown.$MAIN_HOST" "/"
+else
+  echo "SKIP  unclaimed-subdomain check (no wildcard subdomains on workers.dev)"
+fi
 check "static asset css served" 200 "$MAIN_HOST" "/css/style.css"
 
 if [[ "$TARGET" == "local" ]]; then
@@ -192,6 +204,33 @@ check "search survives an FTS injection string" 200 "$MAIN_HOST" "/search?q=%22N
 check "polished landing responds 200" 200 "$MAIN_HOST" "/"
 check_body_contains "landing carries the login CTA" 'href="/login"'
 check_body_contains "landing links to discover" 'href="/discover"'
+
+# --- P7: security headers + admin surface -----------------------------------------
+check "apex headers probe responds 200" 200 "$MAIN_HOST" "/"
+check_header_contains "apex sends nosniff" "x-content-type-options: nosniff"
+check_header_contains "apex sends referrer-policy" "referrer-policy: strict-origin-when-cross-origin"
+check_header_contains "apex sends X-Frame-Options DENY" "x-frame-options: deny"
+check_header_contains "apex CSP is the apex class" "content-security-policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com"
+# The /npub1… views are BLOG-class even on the apex: their CSP starts
+# img-src (no script-src at all — blog pages are JS-free by policy).
+check "npub headers probe is 404" 404 "$MAIN_HOST" "/npub1$(printf 'z%.0s' $(seq 1 58))"
+check_header_contains "npub view carries the blog-class CSP" "content-security-policy: default-src 'none'; img-src"
+# Review fix: the blog class pins base-uri AND form-action (apex pins
+# base-uri 'none' too, but form-action 'self' — this pair is blog-only).
+check_header_contains "blog CSP pins base-uri + form-action" "base-uri 'none'; form-action 'none'"
+check_header_contains "npub 404 still sends nosniff" "x-content-type-options: nosniff"
+if [[ "$SUBDOMAINS" == 1 ]]; then
+  check "unknown subdomain headers probe is 404" 404 "unknown.$MAIN_HOST" "/"
+  check_header_contains "unknown-subdomain 404 sends nosniff" "x-content-type-options: nosniff"
+  check_header_contains "unknown-subdomain 404 carries a CSP" "content-security-policy: default-src 'none'"
+else
+  echo "SKIP  subdomain header checks (no wildcard subdomains on workers.dev)"
+fi
+# /admin is invisible unless ADMIN_PUBKEY is set AND the caller holds the
+# admin session: local dev leaves the secret unset (surface disabled), prod
+# hides it from anonymous callers — 404 either way.
+check "admin surface hidden (disabled or anonymous)" 404 "$MAIN_HOST" "/admin"
+check_post "admin actions hidden too" 404 "$MAIN_HOST" "/admin/block" '{"target":"alice"}'
 
 # --- P5 MANUAL check (documented, not automated): full write→render loop ---------
 # The end-to-end publish flow needs a REAL NIP-07 extension signing in a real

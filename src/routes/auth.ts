@@ -38,6 +38,13 @@ const LOGIN_WINDOW_SECONDS = 15 * 60;
 // client nothing — they only burn write budget (P4 review fix; was 30).
 const CHALLENGE_MAX = 10;
 const CHALLENGE_WINDOW_SECONDS = 15 * 60;
+// Logout was the last unmetered KV-write path (P7 rate-limit review): the
+// session token is shape-checked before the delete, but any WELL-SHAPED
+// 64-hex cookie still costs a KV delete (a write op against the 1,000/day
+// free-tier budget), and header-less curl POSTs sail through CSRF by design.
+// 30/15min/IP is invisible to humans (who log out once) and caps the burn.
+export const LOGOUT_MAX = 30;
+const LOGOUT_WINDOW_SECONDS = 15 * 60;
 
 // Global daily challenge budget (P4 review fix, RETAINED after the ratified
 // nonce→D1 move). Originally this guarded the 1,000-writes/day free-tier KV
@@ -219,6 +226,19 @@ authRoutes.post("/login", async (c) => {
 
 // --- POST /logout — invalidate server-side, clear cookie -----------------------
 authRoutes.post("/logout", async (c) => {
+  // Rate limit BEFORE the KV delete (see LOGOUT_MAX). A denied request gets
+  // an honest 429 — silently clearing only the cookie would leave the
+  // session live server-side while telling the user they are signed out.
+  if (
+    !(await rateLimitAllows(
+      c.env,
+      `logout:ip:${clientIp(c)}`,
+      LOGOUT_MAX,
+      LOGOUT_WINDOW_SECONDS,
+    ))
+  ) {
+    return c.json({ error: "rate limited, try again later" }, 429);
+  }
   const token = getCookie(c, SESSION_COOKIE);
   if (token) await destroySession(c.env, token);
   deleteCookie(c, SESSION_COOKIE, { path: "/" });

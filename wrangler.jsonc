@@ -39,10 +39,19 @@
     "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
     "RELAYS": "wss://relay.damus.io,wss://nos.lol,wss://relay.nostr.band"
   },
-  // Secrets (set via `wrangler secret put`, never committed): TURNSTILE_SECRET_KEY
+  // Secrets (set via `wrangler secret put`, never committed):
+  //   TURNSTILE_SECRET_KEY — Turnstile siteverify secret (required in prod)
+  //   ADMIN_PUBKEY         — hex/npub admin identity for /admin (OPTIONAL;
+  //                          unset = admin surface disabled, all /admin 404)
   "triggers": {
     "crons": ["*/15 * * * *"]
   },
+  // Keep the workers.dev origin enabled alongside the zone routes: it is the
+  // Gate A preview target (docs/ops.md). Post-launch it is harmless — the
+  // host guard 404s every request whose Host is not MAIN_HOST or a
+  // single-label subdomain of it, and the committed MAIN_HOST is
+  // nostrbook.net (Gate A previews override it per-deploy with --var).
+  "workers_dev": true,
   "routes": [
     { "pattern": "nostrbook.net/*", "zone_name": "nostrbook.net" },
     { "pattern": "*.nostrbook.net/*", "zone_name": "nostrbook.net" }
