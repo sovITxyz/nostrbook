@@ -34,9 +34,9 @@
     // "development" here — it enables the client-spoofable X-Forwarded-Host
     // override in src/middleware/guard.ts.
     "ENVIRONMENT": "production",
-    // Cloudflare Turnstile "always passes" visible test site key; replace with the
-    // real site key at deploy time (docs/setup.md).
-    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    // Real Turnstile widget (Sovereign IT → "nostrbook", Managed) for
+    // nostrbook.net + the workers.dev preview host. Secret is a wrangler secret.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAD1JzzXDBykpiavq",
     "RELAYS": "wss://relay.damus.io,wss://nos.lol,wss://relay.nostr.band"
   },
   // Secrets (set via `wrangler secret put`, never committed):
