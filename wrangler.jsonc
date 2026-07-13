@@ -13,17 +13,17 @@
     {
       "binding": "DB",
       "database_name": "nostrbook",
-      // Placeholder until `wrangler d1 create nostrbook` is run against the real
-      // account (see docs/setup.md). Local dev + tests do not need the real id.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Sovereign IT account (region ENAM); created 2026-07-13 per docs/setup.md.
+      // Local dev + tests use miniflare bindings and ignore this id.
+      "database_id": "e9163b12-3cde-4b82-961b-b825c85321e3",
       "migrations_dir": "migrations"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "KV",
-      // Placeholder until `wrangler kv namespace create KV` (see docs/setup.md).
-      "id": "00000000000000000000000000000000"
+      // Sovereign IT account; created 2026-07-13 per docs/setup.md.
+      "id": "75a4c5d58e1f449080bf8be64a995a5a"
     }
   ],
   "vars": {
