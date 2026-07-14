@@ -90,7 +90,7 @@ by `database_id`):
   `wrangler.jsonc`.
 - **KV** `75a4c5d58e1f449080bf8be64a995a5a` (binding `KV`).
 
-### nbread.lol migration — PENDING (see the rename plan, Phase 5)
+### nbread.lol migration — PENDING (target state after the domain migration)
 
 The project moved from `nostrbook.net` to **`nbread.lol`**. The following are the
 target state and are **not yet provisioned** — the committed `wrangler.jsonc`

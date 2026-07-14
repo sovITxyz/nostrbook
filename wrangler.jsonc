@@ -34,8 +34,11 @@
     // "development" here — it enables the client-spoofable X-Forwarded-Host
     // override in src/middleware/guard.ts.
     "ENVIRONMENT": "production",
-    // Real Turnstile widget (Sovereign IT → "nbread", Managed) for
-    // nbread.lol + the workers.dev preview host. Secret is a wrangler secret.
+    // NOTE: carried over from the old nostrbook.net Turnstile widget — this
+    // key will FAIL the hostname check on nbread.lol until a widget is
+    // (re)pointed at nbread.lol + the workers.dev preview host and this value
+    // + TURNSTILE_SECRET_KEY are updated (see docs/setup.md §6). Secret is a
+    // wrangler secret.
     "TURNSTILE_SITE_KEY": "0x4AAAAAAD1JzzXDBykpiavq",
     // Default relays: the service-wide fallback used for cron sync + NIP-05
     // relay hints when a user has not set their own list (dashboard settings
