@@ -1,4 +1,4 @@
-// nostrbook.net/npub1… — on-demand mirror for unclaimed pubkeys: newest-10
+// nbread.lol/npub1… — on-demand mirror for unclaimed pubkeys: newest-10
 // cap per request, progressive backfill via ctx.waitUntil, claimed pubkeys
 // redirect to their subdomain, malformed/blocked npubs 404.
 import { SELF, env } from "cloudflare:test";
@@ -37,40 +37,40 @@ afterEach(async () => {
   await defaultCache().delete(npubCooldownKey(BOB_PK));
 });
 
-describe("nostrbook.net/npub1… (on-demand mirror)", () => {
+describe("nbread.lol/npub1… (on-demand mirror)", () => {
   it("404s a shape-valid npub with a bad checksum without touching relays", async () => {
     const res = await SELF.fetch(
-      `https://nostrbook.net/npub1${"z".repeat(58)}`,
+      `https://nbread.lol/npub1${"z".repeat(58)}`,
     );
     expect(res.status).toBe(404);
   });
 
   it("404s non-npub garbage paths", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/not-an-npub");
+    const res = await SELF.fetch("https://nbread.lol/not-an-npub");
     expect(res.status).toBe(404);
   });
 
   it("redirects a claimed pubkey's npub to its subdomain", async () => {
     await seedAlice();
-    const res = await SELF.fetch(`https://nostrbook.net/${aliceNpub}`, {
+    const res = await SELF.fetch(`https://nbread.lol/${aliceNpub}`, {
       redirect: "manual",
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("https://alice.nostrbook.net/");
+    expect(res.headers.get("location")).toBe("https://alice.nbread.lol/");
 
     const post = await SELF.fetch(
-      `https://nostrbook.net/${aliceNpub}/hello-world`,
+      `https://nbread.lol/${aliceNpub}/hello-world`,
       { redirect: "manual" },
     );
     expect(post.status).toBe(302);
     expect(post.headers.get("location")).toBe(
-      "https://alice.nostrbook.net/hello-world",
+      "https://alice.nbread.lol/hello-world",
     );
   });
 
   it("404s a blocked pubkey's npub", async () => {
     await seedBlockedMallory();
-    const res = await SELF.fetch(`https://nostrbook.net/${malloryNpub}`);
+    const res = await SELF.fetch(`https://nbread.lol/${malloryNpub}`);
     expect(res.status).toBe(404);
   });
 
@@ -78,7 +78,7 @@ describe("nostrbook.net/npub1… (on-demand mirror)", () => {
     serveEvents(bobEvents);
 
     // First visit: synchronous fetch+mirror, capped at the newest 10.
-    const r1 = await SELF.fetch(`https://nostrbook.net/${bobNpub}`);
+    const r1 = await SELF.fetch(`https://nbread.lol/${bobNpub}`);
     expect(r1.status).toBe(200);
     const html1 = await r1.text();
     expect(html1).toContain("Bulk post 12");
@@ -88,7 +88,7 @@ describe("nostrbook.net/npub1… (on-demand mirror)", () => {
     // Second visit (cooldown cleared): served from D1 immediately, backfill
     // runs via ctx.waitUntil and mirrors the remaining 4 events.
     await defaultCache().delete(npubCooldownKey(BOB_PK));
-    const r2 = await SELF.fetch(`https://nostrbook.net/${bobNpub}`);
+    const r2 = await SELF.fetch(`https://nbread.lol/${bobNpub}`);
     expect(r2.status).toBe(200);
     await vi.waitFor(async () => {
       expect(await bobCount()).toBe(bobEvents.length); // all 14
@@ -97,7 +97,7 @@ describe("nostrbook.net/npub1… (on-demand mirror)", () => {
     // With the profile now mirrored, the header shows bob's kind 0 name.
     await defaultCache().delete(npubCooldownKey(BOB_PK));
     const html3 = await (
-      await SELF.fetch(`https://nostrbook.net/${bobNpub}`)
+      await SELF.fetch(`https://nbread.lol/${bobNpub}`)
     ).text();
     expect(html3).toContain("bob-test");
     expect(html3).toContain("Bob&#39;s first post");
@@ -105,10 +105,10 @@ describe("nostrbook.net/npub1… (on-demand mirror)", () => {
 
   it("serves a mirrored post page under the npub base path", async () => {
     serveEvents(bobEvents);
-    await SELF.fetch(`https://nostrbook.net/${bobNpub}`); // seeds newest 10
+    await SELF.fetch(`https://nbread.lol/${bobNpub}`); // seeds newest 10
 
     const res = await SELF.fetch(
-      `https://nostrbook.net/${bobNpub}/bulk-12`,
+      `https://nbread.lol/${bobNpub}/bulk-12`,
     );
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -116,22 +116,22 @@ describe("nostrbook.net/npub1… (on-demand mirror)", () => {
     expect(html).toContain("Bulk body 12.");
 
     const missing = await SELF.fetch(
-      `https://nostrbook.net/${bobNpub}/no-such-slug`,
+      `https://nbread.lol/${bobNpub}/no-such-slug`,
     );
     expect(missing.status).toBe(404);
   });
 
   it("serves valid RSS under the npub base path", async () => {
     serveEvents(bobEvents);
-    await SELF.fetch(`https://nostrbook.net/${bobNpub}`);
+    await SELF.fetch(`https://nbread.lol/${bobNpub}`);
     const res = await SELF.fetch(
-      `https://nostrbook.net/${bobNpub}/rss.xml`,
+      `https://nbread.lol/${bobNpub}/rss.xml`,
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/rss+xml");
     const xml = await res.text();
     expect(xml).toContain(
-      `<link>https://nostrbook.net/${bobNpub}/bulk-12</link>`,
+      `<link>https://nbread.lol/${bobNpub}/bulk-12</link>`,
     );
   });
 });

@@ -26,7 +26,7 @@ function postSettings(
   fields: Record<string, string>,
   headers: Record<string, string> = {},
 ): Promise<Response> {
-  return SELF.fetch("https://nostrbook.net/dashboard/settings", {
+  return SELF.fetch("https://nbread.lol/dashboard/settings", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -178,7 +178,7 @@ describe("POST /dashboard/settings", () => {
       { css: "body { background: #fffdf5 }", about: "", relays: "" },
       { Cookie: cookie },
     );
-    const page = await SELF.fetch("https://alice.nostrbook.net/");
+    const page = await SELF.fetch("https://alice.nbread.lol/");
     const html = await page.text();
     expect(html).toContain("background: #fffdf5");
   });
@@ -188,7 +188,7 @@ describe("GET /dashboard — post list + settings form", () => {
   it("shows the user's posts with edit links, the new-post button, and the settings form", async () => {
     await mirrorEvent(env, aliceHello);
     const cookie = await sessionCookieFor(ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: cookie },
     });
     expect(res.status).toBe(200);
@@ -205,7 +205,7 @@ describe("GET /dashboard — post list + settings form", () => {
   it("does not list other users' posts", async () => {
     await mirrorEvent(env, fixtures.posts.bobFirst as NostrEvent);
     const cookie = await sessionCookieFor(ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: cookie },
     });
     const html = await res.text();
@@ -219,7 +219,7 @@ describe("GET /dashboard — post list + settings form", () => {
       { css: "body { color: teal }", about: "hello about", relays: "wss://nos.lol" },
       { Cookie: cookie },
     );
-    const res = await SELF.fetch("https://nostrbook.net/dashboard?saved=1", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard?saved=1", {
       headers: { Cookie: cookie },
     });
     const html = await res.text();
@@ -302,13 +302,13 @@ describe("POST /dashboard/settings — review-fix hardening", () => {
     );
 
     for (const path of ["/", "/hello-world"]) {
-      const page = await SELF.fetch(`https://alice.nostrbook.net${path}`);
+      const page = await SELF.fetch(`https://alice.nbread.lol${path}`);
       expect(page.status, path).toBe(200);
       const html = await page.text();
       expect(html, path).toContain("about from settings");
       // The kind-0 bio is REPLACED, not shown alongside.
       expect(html, path).not.toContain(
-        "Nostrbook throwaway test profile (alice)",
+        "nbread.lol throwaway test profile (alice)",
       );
     }
   });

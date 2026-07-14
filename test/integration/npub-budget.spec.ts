@@ -87,14 +87,14 @@ describe("npub on-demand mirror budget", () => {
     await seedCounter("npub-mirror:ip:9.9.9.9", NPUB_MIRROR_IP_DAILY_CAP);
 
     // The capped IP gets a page but NO relay mirror session runs:
-    const r1 = await SELF.fetch(`https://nostrbook.net/${bobNpub}`, {
+    const r1 = await SELF.fetch(`https://nbread.lol/${bobNpub}`, {
       headers: { "CF-Connecting-IP": "9.9.9.9" },
     });
     expect(r1.status).toBe(200);
     expect(await eventCount(BOB_PK)).toBe(0);
 
     // A different IP still has budget (the denial did NOT set the cooldown):
-    const r2 = await SELF.fetch(`https://nostrbook.net/${bobNpub}`, {
+    const r2 = await SELF.fetch(`https://nbread.lol/${bobNpub}`, {
       headers: { "CF-Connecting-IP": "8.8.8.8" },
     });
     expect(r2.status).toBe(200);
@@ -105,14 +105,14 @@ describe("npub on-demand mirror budget", () => {
     serveEvents(aliceEvents);
     await seedCounter(NPUB_MIRROR_GLOBAL_KEY, NPUB_MIRROR_GLOBAL_DAILY_CAP);
 
-    const r1 = await SELF.fetch(`https://nostrbook.net/${aliceNpub}`);
+    const r1 = await SELF.fetch(`https://nbread.lol/${aliceNpub}`);
     expect(r1.status).toBe(200); // serves what D1 has (nothing) without relay work
     expect(await eventCount(ALICE_PK)).toBe(0);
 
     // Budget frees up (next day) → the same npub mirrors normally, because
     // the denied attempt never marked the cooldown:
     await env.DB.prepare("DELETE FROM rate_limits").run();
-    const r2 = await SELF.fetch(`https://nostrbook.net/${aliceNpub}`);
+    const r2 = await SELF.fetch(`https://nbread.lol/${aliceNpub}`);
     expect(r2.status).toBe(200);
     expect(await eventCount(ALICE_PK)).toBe(aliceEvents.length);
   });

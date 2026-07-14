@@ -11,7 +11,7 @@ function post(
   path: string,
   headers: Record<string, string> = {},
 ): Promise<Response> {
-  return SELF.fetch(`https://nostrbook.net${path}`, {
+  return SELF.fetch(`https://nbread.lol${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -38,7 +38,7 @@ describe("csrf middleware (main site)", () => {
   });
 
   it("rejects a subdomain Origin (tenant content must not drive the apex)", async () => {
-    const res = await post("/login", { Origin: "https://alice.nostrbook.net" });
+    const res = await post("/login", { Origin: "https://alice.nbread.lol" });
     expect(res.status).toBe(403);
   });
 
@@ -52,7 +52,7 @@ describe("csrf middleware (main site)", () => {
   it("accepts a same-origin POST (Origin + Sec-Fetch-Site)", async () => {
     // Passes CSRF, then fails JSON-body validation → 400, NOT 403.
     const res = await post("/login", {
-      Origin: "https://nostrbook.net",
+      Origin: "https://nbread.lol",
       "Sec-Fetch-Site": "same-origin",
     });
     expect(res.status).toBe(400);
@@ -64,7 +64,7 @@ describe("csrf middleware (main site)", () => {
   });
 
   it("does not gate safe methods", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/login", {
+    const res = await SELF.fetch("https://nbread.lol/login", {
       headers: { Origin: "https://evil.com" },
     });
     expect(res.status).toBe(200); // GET renders regardless of Origin
@@ -73,7 +73,7 @@ describe("csrf middleware (main site)", () => {
   it("shields state-changing routes even with a valid session", async () => {
     const sid = await createSession(env, ALICE_PK);
     const forged = await SELF.fetch(
-      "https://nostrbook.net/dashboard/claim",
+      "https://nbread.lol/dashboard/claim",
       {
         method: "POST",
         headers: {

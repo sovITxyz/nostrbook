@@ -1,20 +1,20 @@
 // Editor toolbar + Write/Preview tabs + counter + localStorage autosave.
-// Pure DOM wiring: all text math lives in editor-md.js (NostrbookEditorMd)
+// Pure DOM wiring: all text math lives in editor-md.js (NbreadEditorMd)
 // and EVERY textarea mutation goes through replaceRange() below, whose
 // execCommand seam keeps each action a single native undo step.
 //
 // Preview seam: activating the Preview tab dispatches a
-// "nostrbook:preview-requested" CustomEvent on document; editor.js listens
+// "nbread:preview-requested" CustomEvent on document; editor.js listens
 // and runs the server-rendered preview fetch (it owns /dashboard/preview,
 // its value cache, and rate-limit messaging).
 //
-// Draft seam: window.NostrbookDraft.clear() is called by editor.js after a
+// Draft seam: window.NbreadDraft.clear() is called by editor.js after a
 // successful publish or delete — it drops the stored draft AND disables
 // further writes so the beforeunload flush cannot resurrect it.
 (function () {
   "use strict";
 
-  var md = globalThis.NostrbookEditorMd;
+  var md = globalThis.NbreadEditorMd;
   var contentEl = document.getElementById("post-content");
   if (!md || !contentEl) return;
 
@@ -337,7 +337,7 @@
   }
   window.addEventListener("beforeunload", writeDraft);
 
-  window.NostrbookDraft = {
+  window.NbreadDraft = {
     // Called by editor.js after a successful publish/delete: drop the draft
     // and disable further writes so the unload flush cannot re-save the
     // just-published content as a phantom draft.
@@ -459,7 +459,7 @@
     if (writePanel) writePanel.hidden = previewing;
     if (previewPanel) previewPanel.hidden = !previewing;
     if (previewing) {
-      document.dispatchEvent(new CustomEvent("nostrbook:preview-requested"));
+      document.dispatchEvent(new CustomEvent("nbread:preview-requested"));
     }
   }
 

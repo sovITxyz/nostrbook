@@ -515,7 +515,7 @@
     );
   }
 
-  globalThis.NostrbookEditorMd = {
+  globalThis.NbreadEditorMd = {
     wrapInline: wrapInline,
     toggleLinePrefix: toggleLinePrefix,
     cycleHeading: cycleHeading,

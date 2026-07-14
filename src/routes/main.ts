@@ -44,7 +44,7 @@ export const mainRoutes = new Hono<DispatchEnv>();
 mainRoutes.get("/", (c) => c.html(MainHome()));
 
 mainRoutes.get("/healthz", (c) =>
-  c.json({ ok: true, service: "nostrbook", environment: c.env.ENVIRONMENT }),
+  c.json({ ok: true, service: "nbread", environment: c.env.ENVIRONMENT }),
 );
 
 // --- Static info pages (/privacy /terms /docs) --------------------------------
@@ -70,7 +70,7 @@ mainRoutes.get("/docs", async (c) => {
   return res;
 });
 
-// --- nostrbook.net/discover — cross-tenant recent-posts feed (P6) -------------
+// --- nbread.lol/discover — cross-tenant recent-posts feed (P6) -------------
 // Serves STORED data only (titles/summaries from tag strings, escaped text —
 // never renderPost) to stay inside the 10ms public-path CPU budget. The
 // per-tenant gen cache (middleware/cache.ts) keys on ONE pubkey's generation
@@ -182,7 +182,7 @@ mainRoutes.get("/discover", async (c) => {
   return res;
 });
 
-// --- nostrbook.net/search — FTS5 search over mirrored posts (P6) --------------
+// --- nbread.lol/search — FTS5 search over mirrored posts (P6) --------------
 // Public D1-query endpoint, so a light per-IP rate limit applies (D1
 // rate_limits via the existing checkRateLimit — zero KV writes). The bound
 // is generous for humans: 30 queries/minute/IP.
@@ -238,7 +238,7 @@ mainRoutes.get("/search", async (c) => {
   );
 });
 
-// --- nostrbook.net/npub1… — on-demand blogs for UNCLAIMED pubkeys -------------
+// --- nbread.lol/npub1… — on-demand blogs for UNCLAIMED pubkeys -------------
 // Claimed pubkeys redirect to their subdomain; unclaimed ones get fetched
 // from the relays and mirrored on demand (never more than NPUB_MIRROR_CAP
 // event verifications per request), then rendered with the same tenant

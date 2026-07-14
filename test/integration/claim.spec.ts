@@ -26,7 +26,7 @@ function claim(
   handle: string,
   opts: { token?: string; ip?: string } = {},
 ): Promise<Response> {
-  return SELF.fetch("https://nostrbook.net/dashboard/claim", {
+  return SELF.fetch("https://nbread.lol/dashboard/claim", {
     method: "POST",
     headers: {
       Cookie: `sid=${sid}`,
@@ -66,7 +66,7 @@ afterEach(() => {
 describe("GET /dashboard", () => {
   it("shows the claim form (with Turnstile) before any claim", async () => {
     const sid = await createSession(env, ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: `sid=${sid}` },
     });
     expect(res.status).toBe(200);
@@ -80,19 +80,19 @@ describe("GET /dashboard", () => {
   it("shows the handle (no claim form) once claimed", async () => {
     const sid = await createSession(env, ALICE_PK);
     expect((await claim(sid, "alice")).status).toBe(303);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: `sid=${sid}` },
     });
     const html = await res.text();
-    expect(html).toContain("alice.nostrbook.net");
-    expect(html).toContain("alice@nostrbook.net");
+    expect(html).toContain("alice.nbread.lol");
+    expect(html).toContain("alice@nbread.lol");
     expect(html).not.toContain("/dashboard/claim");
   });
 });
 
 describe("POST /dashboard/claim", () => {
   it("requires a session", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/dashboard/claim", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard/claim", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: "handle=nobody&cf-turnstile-response=x",
@@ -107,7 +107,7 @@ describe("POST /dashboard/claim", () => {
     expect(res.headers.get("location")).toBe("/dashboard");
     expect(await handleOf(ALICE_PK)).toBe("alice");
     // The blog is immediately live on its subdomain.
-    const blog = await SELF.fetch("https://alice.nostrbook.net/");
+    const blog = await SELF.fetch("https://alice.nbread.lol/");
     expect(blog.status).toBe(200);
   });
 

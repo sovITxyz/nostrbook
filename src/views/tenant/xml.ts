@@ -35,7 +35,7 @@ type FeedOpts = {
   title: string;
   /** Short blog description (profile about or a default). */
   description: string;
-  /** Absolute blog origin, no trailing slash: https://alice.nostrbook.net */
+  /** Absolute blog origin, no trailing slash: https://alice.nbread.lol */
   baseUrl: string;
   /** Author handle for Atom <author>. */
   handle: string;

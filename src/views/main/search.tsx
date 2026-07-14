@@ -18,7 +18,7 @@ export function SearchPage(props: {
   error?: string | null;
 }) {
   return (
-    <Layout title="Search — Nostrbook">
+    <Layout title="Search — nbread.lol">
       <SiteHeader current="search" />
       <main class="search">
         <h1>Search</h1>

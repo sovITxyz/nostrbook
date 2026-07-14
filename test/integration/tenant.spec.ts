@@ -78,12 +78,12 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
 
   describe("blog home", () => {
     it("lists posts with title, summary and date", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/");
+      const res = await SELF.fetch("https://alice.nbread.lol/");
       expect(res.status).toBe(200);
       const html = await res.text();
       expect(html).toContain("Hello world");
       expect(html).toContain("Markdown torture test");
-      expect(html).toContain("Alice&#39;s first Nostrbook test post");
+      expect(html).toContain("Alice&#39;s first nbread.lol test post");
       expect(html).toContain("2023-11-14");
       expect(html).toContain('href="/hello-world"');
       expect(html).toMatchSnapshot();
@@ -91,17 +91,17 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
 
     it("shows the profile header (name, picture, about) and @handle", async () => {
       const html = await (
-        await SELF.fetch("https://alice.nostrbook.net/")
+        await SELF.fetch("https://alice.nbread.lol/")
       ).text();
       expect(html).toContain("alice-test");
       expect(html).toContain('src="https://example.com/alice.png"');
-      expect(html).toContain("Nostrbook throwaway test profile (alice)");
+      expect(html).toContain("nbread.lol throwaway test profile (alice)");
       expect(html).toContain("@alice");
     });
 
     it("inlines the theme CSS only after sanitization", async () => {
       const html = await (
-        await SELF.fetch("https://alice.nostrbook.net/")
+        await SELF.fetch("https://alice.nbread.lol/")
       ).text();
       expect(html).toContain("color: #345");
       expect(html).not.toMatch(/@import/i);
@@ -111,7 +111,7 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
 
     it("escapes hostile post titles/summaries in the list (attribute + text)", async () => {
       const html = await (
-        await SELF.fetch("https://alice.nostrbook.net/")
+        await SELF.fetch("https://alice.nbread.lol/")
       ).text();
       expect(findXssVectors(html, "page")).toEqual([]);
     });
@@ -120,7 +120,7 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
   describe("post page", () => {
     it("renders title, date and content", async () => {
       const res = await SELF.fetch(
-        "https://alice.nostrbook.net/hello-world",
+        "https://alice.nbread.lol/hello-world",
       );
       expect(res.status).toBe(200);
       const html = await res.text();
@@ -132,7 +132,7 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
 
     it("renders the torture post with all features", async () => {
       const html = await (
-        await SELF.fetch("https://alice.nostrbook.net/markdown-torture")
+        await SELF.fetch("https://alice.nbread.lol/markdown-torture")
       ).text();
       expect(html).toContain('class="hljs language-js"');
       expect(html).toContain('<section class="footnotes">');
@@ -141,7 +141,7 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
     });
 
     it("neutralizes every vector in the XSS post (content, title, summary)", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/xss-test");
+      const res = await SELF.fetch("https://alice.nbread.lol/xss-test");
       expect(res.status).toBe(200);
       const html = await res.text();
       expect(findXssVectors(html, "page")).toEqual([]);
@@ -152,34 +152,34 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
     });
 
     it("404s an unknown slug with the rendered not-found page", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/no-such-post");
+      const res = await SELF.fetch("https://alice.nbread.lol/no-such-post");
       expect(res.status).toBe(404);
       expect(await res.text()).toContain("404");
     });
 
     it("404s deep paths", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/a/b/c");
+      const res = await SELF.fetch("https://alice.nbread.lol/a/b/c");
       expect(res.status).toBe(404);
     });
   });
 
   describe("feeds and crawler files", () => {
     it("serves well-formed RSS with escaped titles", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/rss.xml");
+      const res = await SELF.fetch("https://alice.nbread.lol/rss.xml");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("application/rss+xml");
       const xml = await res.text();
       expect(XMLValidator.validate(xml)).toBe(true);
       expect(xml).toContain("<title>alice-test</title>");
       expect(xml).toContain(
-        "<link>https://alice.nostrbook.net/hello-world</link>",
+        "<link>https://alice.nbread.lol/hello-world</link>",
       );
       expect(xml.toLowerCase()).not.toContain("<script");
       expect(xml).toMatchSnapshot();
     });
 
     it("serves well-formed Atom", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/atom.xml");
+      const res = await SELF.fetch("https://alice.nbread.lol/atom.xml");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain(
         "application/atom+xml",
@@ -191,24 +191,24 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
     });
 
     it("serves a well-formed sitemap.xml", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/sitemap.xml");
+      const res = await SELF.fetch("https://alice.nbread.lol/sitemap.xml");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("application/xml");
       const xml = await res.text();
       expect(XMLValidator.validate(xml)).toBe(true);
       expect(xml).toContain(
-        "<loc>https://alice.nostrbook.net/hello-world</loc>",
+        "<loc>https://alice.nbread.lol/hello-world</loc>",
       );
       expect(xml).toMatchSnapshot();
     });
 
     it("serves robots.txt pointing at the sitemap", async () => {
-      const res = await SELF.fetch("https://alice.nostrbook.net/robots.txt");
+      const res = await SELF.fetch("https://alice.nbread.lol/robots.txt");
       expect(res.status).toBe(200);
       const body = await res.text();
       expect(body).toContain("User-agent: *");
       expect(body).toContain(
-        "Sitemap: https://alice.nostrbook.net/sitemap.xml",
+        "Sitemap: https://alice.nbread.lol/sitemap.xml",
       );
     });
   });
@@ -228,21 +228,21 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
       });
       try {
         const home = await (
-          await SELF.fetch("https://alice.nostrbook.net/")
+          await SELF.fetch("https://alice.nbread.lol/")
         ).text();
         expect(home).not.toContain("Ghost post");
         expect(home).toContain("Hello world"); // real posts still listed
 
         const rss = await (
-          await SELF.fetch("https://alice.nostrbook.net/rss.xml")
+          await SELF.fetch("https://alice.nbread.lol/rss.xml")
         ).text();
         expect(rss).not.toContain("Ghost post");
 
         const sitemap = await (
-          await SELF.fetch("https://alice.nostrbook.net/sitemap.xml")
+          await SELF.fetch("https://alice.nbread.lol/sitemap.xml")
         ).text();
         const homeLocs = sitemap.match(
-          /<loc>https:\/\/alice\.nostrbook\.net\/<\/loc>/g,
+          /<loc>https:\/\/alice\.nbread\.lol\/<\/loc>/g,
         );
         expect(homeLocs?.length ?? 0).toBe(1); // home emitted exactly once
       } finally {
@@ -260,14 +260,14 @@ describe("blog subdomain rendering (SELF.fetch)", () => {
         .bind(fixtures.profiles.bob.pubkey, "bob", "2026-01-01T00:00:00.000Z")
         .run();
 
-      const home = await SELF.fetch("https://bob.nostrbook.net/");
+      const home = await SELF.fetch("https://bob.nbread.lol/");
       expect(home.status).toBe(200);
       expect(await home.text()).toContain("No posts yet.");
 
-      const rss = await SELF.fetch("https://bob.nostrbook.net/rss.xml");
+      const rss = await SELF.fetch("https://bob.nbread.lol/rss.xml");
       expect(XMLValidator.validate(await rss.text())).toBe(true);
 
-      const sitemap = await SELF.fetch("https://bob.nostrbook.net/sitemap.xml");
+      const sitemap = await SELF.fetch("https://bob.nbread.lol/sitemap.xml");
       expect(XMLValidator.validate(await sitemap.text())).toBe(true);
     });
   });

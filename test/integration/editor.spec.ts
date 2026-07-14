@@ -35,7 +35,7 @@ function postMirror(
   event: unknown,
   headers: Record<string, string> = {},
 ): Promise<Response> {
-  return SELF.fetch("https://nostrbook.net/api/mirror", {
+  return SELF.fetch("https://nbread.lol/api/mirror", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -50,7 +50,7 @@ function postPreview(
   markdown: string,
   headers: Record<string, string> = {},
 ): Promise<Response> {
-  return SELF.fetch("https://nostrbook.net/dashboard/preview", {
+  return SELF.fetch("https://nbread.lol/dashboard/preview", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -180,7 +180,7 @@ describe("POST /api/mirror — auth gates", () => {
       .bind(bobFirst.id)
       .first<{ deleted: number }>();
     expect(row!.deleted).toBe(0); // bob's row untouched
-    const page = await SELF.fetch("https://bob.nostrbook.net/bob-first");
+    const page = await SELF.fetch("https://bob.nbread.lol/bob-first");
     expect(page.status).toBe(200); // and his blog still serves it
   });
 });
@@ -192,7 +192,7 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ result: "stored" });
 
-    const page = await SELF.fetch("https://alice.nostrbook.net/hello-world");
+    const page = await SELF.fetch("https://alice.nbread.lol/hello-world");
     expect(page.status).toBe(200);
     expect(await page.text()).toContain("Hello world");
   });
@@ -203,7 +203,7 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
     const edit = await postMirror(aliceHelloEdit, { Cookie: cookie });
     expect(await edit.json()).toEqual({ result: "stored" });
 
-    const home = await SELF.fetch("https://alice.nostrbook.net/");
+    const home = await SELF.fetch("https://alice.nbread.lol/");
     const html = await home.text();
     expect(html).toContain("Hello world (edited)");
     // The old version is GONE (replaceable slot), not listed alongside.
@@ -227,7 +227,7 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
     const cookie = await sessionCookieFor(ALICE_PK);
     await postMirror(aliceHello, { Cookie: cookie });
     expect(
-      (await SELF.fetch("https://alice.nostrbook.net/hello-world")).status,
+      (await SELF.fetch("https://alice.nbread.lol/hello-world")).status,
     ).toBe(200);
 
     // Committed kind 5 fixture: e-tags aliceHello.id, a-tags its address —
@@ -237,9 +237,9 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
     expect(await res.json()).toEqual({ result: "stored" });
 
     expect(
-      (await SELF.fetch("https://alice.nostrbook.net/hello-world")).status,
+      (await SELF.fetch("https://alice.nbread.lol/hello-world")).status,
     ).toBe(404);
-    const home = await SELF.fetch("https://alice.nostrbook.net/");
+    const home = await SELF.fetch("https://alice.nbread.lol/");
     expect(await home.text()).not.toContain("Hello world");
   });
 
@@ -254,7 +254,7 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
     const res = await postMirror(del, { Cookie: cookie });
     expect(await res.json()).toEqual({ result: "stored" });
     expect(
-      (await SELF.fetch("https://alice.nostrbook.net/hello-world")).status,
+      (await SELF.fetch("https://alice.nbread.lol/hello-world")).status,
     ).toBe(404);
   });
 });
@@ -262,7 +262,7 @@ describe("POST /api/mirror — publish / edit / delete loop", () => {
 describe("editor pages", () => {
   it("redirects anonymous users to /login", async () => {
     for (const path of ["/dashboard/posts/new", "/dashboard/editor?slug=hello-world"]) {
-      const res = await SELF.fetch(`https://nostrbook.net${path}`, {
+      const res = await SELF.fetch(`https://nbread.lol${path}`, {
         redirect: "manual",
       });
       expect(res.status, path).toBe(302);
@@ -272,7 +272,7 @@ describe("editor pages", () => {
 
   it("serves the blank editor at /dashboard/posts/new", async () => {
     const cookie = await sessionCookieFor(ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard/posts/new", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard/posts/new", {
       headers: { Cookie: cookie },
     });
     expect(res.status).toBe(200);
@@ -287,7 +287,7 @@ describe("editor pages", () => {
     await mirrorEvent(env, aliceHello);
     const cookie = await sessionCookieFor(ALICE_PK);
     const res = await SELF.fetch(
-      "https://nostrbook.net/dashboard/editor?slug=hello-world",
+      "https://nbread.lol/dashboard/editor?slug=hello-world",
       { headers: { Cookie: cookie } },
     );
     expect(res.status).toBe(200);
@@ -303,7 +303,7 @@ describe("editor pages", () => {
     const cookie = await sessionCookieFor(ALICE_PK);
     for (const slug of ["no-such-post", "bob-first"]) {
       const res = await SELF.fetch(
-        `https://nostrbook.net/dashboard/editor?slug=${slug}`,
+        `https://nbread.lol/dashboard/editor?slug=${slug}`,
         { headers: { Cookie: cookie } },
       );
       expect(res.status, slug).toBe(404);
@@ -314,7 +314,7 @@ describe("editor pages", () => {
     await mirrorEvent(env, aliceXss);
     const cookie = await sessionCookieFor(ALICE_PK);
     const res = await SELF.fetch(
-      "https://nostrbook.net/dashboard/editor?slug=xss-test",
+      "https://nbread.lol/dashboard/editor?slug=xss-test",
       { headers: { Cookie: cookie } },
     );
     expect(res.status).toBe(200);
@@ -333,7 +333,7 @@ describe("POST /dashboard/preview — parity with the publish pipeline", () => {
 
   it("rejects a non-string body shape (400)", async () => {
     const cookie = await sessionCookieFor(ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard/preview", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: cookie },
       body: JSON.stringify({ markdown: 42 }),
@@ -406,7 +406,7 @@ describe("POST /api/mirror — review-fix hardening", () => {
         controller.close();
       },
     });
-    const res = await SELF.fetch("https://nostrbook.net/api/mirror", {
+    const res = await SELF.fetch("https://nbread.lol/api/mirror", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -503,7 +503,7 @@ describe("POST /api/mirror — review-fix hardening", () => {
       .first<{ deleted: number }>();
     expect(row?.deleted).toBe(1);
     expect(
-      (await SELF.fetch("https://alice.nostrbook.net/hello-world")).status,
+      (await SELF.fetch("https://alice.nbread.lol/hello-world")).status,
     ).toBe(404);
   });
 });
@@ -520,7 +520,7 @@ describe("editor pages — review-fix hardening", () => {
     expect((await postMirror(post, { Cookie: cookie })).status).toBe(200);
 
     const res = await SELF.fetch(
-      "https://nostrbook.net/dashboard/editor?slug=new",
+      "https://nbread.lol/dashboard/editor?slug=new",
       { headers: { Cookie: cookie } },
     );
     expect(res.status).toBe(200);
@@ -529,7 +529,7 @@ describe("editor pages — review-fix hardening", () => {
     expect(html).toContain("the slug is new");
 
     // The literal new-post page is untouched by the route move.
-    const blank = await SELF.fetch("https://nostrbook.net/dashboard/posts/new", {
+    const blank = await SELF.fetch("https://nbread.lol/dashboard/posts/new", {
       headers: { Cookie: cookie },
     });
     expect(blank.status).toBe(200);
@@ -546,7 +546,7 @@ describe("editor pages — review-fix hardening", () => {
     await mirrorEvent(env, post);
     const cookie = await sessionCookieFor(ALICE_PK);
     const res = await SELF.fetch(
-      "https://nostrbook.net/dashboard/editor?slug=leading-newline",
+      "https://nbread.lol/dashboard/editor?slug=leading-newline",
       { headers: { Cookie: cookie } },
     );
     const html = await res.text();
@@ -582,7 +582,7 @@ describe("editor page — toolbar, tabs, and script wiring", () => {
 
   async function fetchEditorHtml(): Promise<string> {
     const cookie = await sessionCookieFor(ALICE_PK);
-    const res = await SELF.fetch("https://nostrbook.net/dashboard/posts/new", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard/posts/new", {
       headers: { Cookie: cookie },
     });
     expect(res.status).toBe(200);

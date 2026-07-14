@@ -23,7 +23,7 @@ export function AdminPage(props: {
   blocked: BlockedEntry[];
 }) {
   return (
-    <Layout title="Admin — Nostrbook">
+    <Layout title="Admin — nbread.lol">
       <SiteHeader variant="app" />
       <main class="admin">
         <h1>Admin</h1>

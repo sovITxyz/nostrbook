@@ -9,19 +9,19 @@ import { SiteFooter } from "./chrome";
 export function MainHome() {
   return (
     <Layout
-      title="Nostrbook — Nostr-native blogging"
+      title="nbread.lol — Nostr-native blogging"
       description="Nostr-native, no-nonsense, super-fast blogging. Your posts are NIP-23 events signed by your key."
     >
       <main class="landing">
         <div class="hero">
           <LogoMark size={72} class="logo-hero" />
-          <h1>Nostrbook</h1>
+          <h1>nbread.lol</h1>
           <p class="tagline">
             Nostr-native, no-nonsense, super-fast blogging.
           </p>
           <p class="tagline-sub">
             Your posts are NIP-23 events signed by your key — we just render
-            them beautifully at <code>you.nostrbook.net</code>.
+            them beautifully at <code>you.nbread.lol</code>.
           </p>
           <p class="landing-cta">
             <a class="cta-button" href="/login">
@@ -41,11 +41,11 @@ export function MainHome() {
           </li>
           <li>
             <strong>A real blog, not a feed</strong> — a clean site at{" "}
-            <code>handle.nostrbook.net</code> with RSS, Atom, and a sitemap.
+            <code>handle.nbread.lol</code> with RSS, Atom, and a sitemap.
           </li>
           <li>
             <strong>Free NIP-05</strong> — be{" "}
-            <code>handle@nostrbook.net</code> everywhere on Nostr.
+            <code>handle@nbread.lol</code> everywhere on Nostr.
           </li>
           <li>
             <strong>Write anywhere</strong> — the built-in markdown editor

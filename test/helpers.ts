@@ -105,7 +105,7 @@ export function signLoginEvent(
 ): NostrEvent {
   const tags: string[][] = [];
   if (opts.relay !== null) {
-    tags.push(["relay", opts.relay ?? "wss://nostrbook.net"]);
+    tags.push(["relay", opts.relay ?? "wss://nbread.lol"]);
   }
   tags.push(["challenge", challenge]);
   return finalizeEvent(
@@ -121,7 +121,7 @@ export function signLoginEvent(
 
 /** Fetch a login challenge nonce from the worker. */
 export async function getChallenge(ip = "10.0.0.1"): Promise<string> {
-  const res = await SELF.fetch("https://nostrbook.net/login/challenge", {
+  const res = await SELF.fetch("https://nbread.lol/login/challenge", {
     headers: { "CF-Connecting-IP": ip },
   });
   if (res.status !== 200) {
@@ -141,7 +141,7 @@ export function postLogin(
     "CF-Connecting-IP": opts.ip ?? "10.0.0.1",
   };
   if (opts.cookie) headers.Cookie = opts.cookie;
-  return SELF.fetch("https://nostrbook.net/login", {
+  return SELF.fetch("https://nbread.lol/login", {
     method: "POST",
     headers,
     body: typeof event === "string" ? event : JSON.stringify(event),
@@ -206,7 +206,7 @@ export function signDeleteEvent(opts: {
       kind: 5,
       created_at: opts.created_at,
       tags,
-      content: "Deleted via Nostrbook",
+      content: "Deleted via nbread.lol",
     },
     hexToBytes(opts.sk ?? ALICE_SK),
   ) as NostrEvent;

@@ -25,7 +25,7 @@ describe("postMeta", () => {
     expect(meta).toEqual({
       slug: "hello-world",
       title: "Hello world",
-      summary: "Alice's first Nostrbook test post",
+      summary: "Alice's first nbread.lol test post",
       published_at: 1700000100,
       image: null,
     });

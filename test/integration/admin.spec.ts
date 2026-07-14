@@ -44,7 +44,7 @@ function postAdmin(
   const headers: Record<string, string> = {};
   if (opts.cookie) headers.Cookie = opts.cookie;
   if (opts.origin) headers.Origin = opts.origin;
-  return SELF.fetch(`https://nostrbook.net${path}`, {
+  return SELF.fetch(`https://nbread.lol${path}`, {
     method: "POST",
     headers,
     body: new URLSearchParams({ target }),
@@ -97,12 +97,12 @@ describe("admin gate", () => {
   });
 
   it("anonymous callers get 404", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/admin");
+    const res = await SELF.fetch("https://nbread.lol/admin");
     expect(res.status).toBe(404);
   });
 
   it("non-admin sessions (mallory) get 404 on GET and POST", async () => {
-    const page = await SELF.fetch("https://nostrbook.net/admin", {
+    const page = await SELF.fetch("https://nbread.lol/admin", {
       headers: { Cookie: malloryCookie },
     });
     expect(page.status).toBe(404);
@@ -113,7 +113,7 @@ describe("admin gate", () => {
   });
 
   it("the admin session gets the page", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/admin", {
+    const res = await SELF.fetch("https://nbread.lol/admin", {
       headers: { Cookie: adminCookie },
     });
     expect(res.status).toBe(200);
@@ -123,7 +123,7 @@ describe("admin gate", () => {
   it("unset ADMIN_PUBKEY disables the surface entirely (even for the admin)", async () => {
     for (const value of ["", "not-a-key"]) {
       const res = await app.fetch(
-        new Request("https://nostrbook.net/admin", {
+        new Request("https://nbread.lol/admin", {
           headers: { Cookie: adminCookie },
         }),
         { ...env, ADMIN_PUBKEY: value },
@@ -189,23 +189,23 @@ describe("admin gate", () => {
 describe("block → everywhere → unblock (alice, claimed)", () => {
   it("runs the full lifecycle", async () => {
     // --- Pre-block state: everything visible -----------------------------
-    const warm1 = await SELF.fetch("https://alice.nostrbook.net/");
+    const warm1 = await SELF.fetch("https://alice.nbread.lol/");
     expect(warm1.status).toBe(200);
-    const warm2 = await SELF.fetch("https://alice.nostrbook.net/");
-    expect(warm2.headers.get("X-Nostrbook-Cache")).toBe("hit"); // page is CACHED
+    const warm2 = await SELF.fetch("https://alice.nbread.lol/");
+    expect(warm2.headers.get("X-Nbread-Cache")).toBe("hit"); // page is CACHED
 
     await resetDiscoverCache();
-    const discoverBefore = await SELF.fetch("https://nostrbook.net/discover");
+    const discoverBefore = await SELF.fetch("https://nbread.lol/discover");
     expect(await discoverBefore.text()).toContain("Hello world");
 
     const searchBefore = await SELF.fetch(
-      "https://nostrbook.net/search?q=hello",
+      "https://nbread.lol/search?q=hello",
       { headers: { "CF-Connecting-IP": "10.1.1.1" } },
     );
     expect(await searchBefore.text()).toContain("Hello world");
 
     const nip05Before = await SELF.fetch(
-      "https://nostrbook.net/.well-known/nostr.json?name=alice",
+      "https://nbread.lol/.well-known/nostr.json?name=alice",
     );
     expect(((await nip05Before.json()) as { names: Record<string, string> }).names.alice).toBe(
       ALICE_PK,
@@ -224,31 +224,31 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     expect(await env.KV.get(`gen:${ALICE_PK}`)).not.toBe(genBefore);
 
     // Blog host 404s — INCLUDING the page that was just served from cache.
-    const blog = await SELF.fetch("https://alice.nostrbook.net/");
+    const blog = await SELF.fetch("https://alice.nbread.lol/");
     expect(blog.status).toBe(404);
-    const post = await SELF.fetch("https://alice.nostrbook.net/hello-world");
+    const post = await SELF.fetch("https://alice.nbread.lol/hello-world");
     expect(post.status).toBe(404);
 
     // npub view 404s (claimed handles normally redirect; blocked → 404).
     const npubView = await SELF.fetch(
-      `https://nostrbook.net/${npubEncode(ALICE_PK)}`,
+      `https://nbread.lol/${npubEncode(ALICE_PK)}`,
       { headers: { "CF-Connecting-IP": "10.1.1.2" } },
     );
     expect(npubView.status).toBe(404);
 
     // Dropped from discover (page cache purged → fresh query) and search.
     await resetDiscoverCache();
-    const discoverAfter = await SELF.fetch("https://nostrbook.net/discover");
+    const discoverAfter = await SELF.fetch("https://nbread.lol/discover");
     expect(await discoverAfter.text()).not.toContain("Hello world");
     const searchAfter = await SELF.fetch(
-      "https://nostrbook.net/search?q=hello",
+      "https://nbread.lol/search?q=hello",
       { headers: { "CF-Connecting-IP": "10.1.1.1" } },
     );
     expect(await searchAfter.text()).not.toContain("Hello world");
 
     // NIP-05: blocked users are DROPPED from nostr.json (documented policy).
     const nip05After = await SELF.fetch(
-      "https://nostrbook.net/.well-known/nostr.json?name=alice",
+      "https://nbread.lol/.well-known/nostr.json?name=alice",
     );
     expect((await nip05After.json()) as object).toEqual({ names: {} });
 
@@ -260,7 +260,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
       content: "should not land",
       created_at: Math.floor(Date.now() / 1000),
     });
-    const mirror = await SELF.fetch("https://nostrbook.net/api/mirror", {
+    const mirror = await SELF.fetch("https://nbread.lol/api/mirror", {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: aliceCookie },
       body: JSON.stringify(signed),
@@ -269,7 +269,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
 
     // …settings (P5 gate)…
     const settings = await SELF.fetch(
-      "https://nostrbook.net/dashboard/settings",
+      "https://nbread.lol/dashboard/settings",
       {
         method: "POST",
         headers: { Cookie: aliceCookie },
@@ -282,7 +282,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     // to run renderPost on the request path refuses blocked keys — blocked
     // identities must not spend request-path CPU)…
     const preview = await SELF.fetch(
-      "https://nostrbook.net/dashboard/preview",
+      "https://nbread.lol/dashboard/preview",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: aliceCookie },
@@ -293,7 +293,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
 
     // …and claim (P4 gate — alice already holds a handle, but the blocked
     // check fires first and hides even the "already claimed" signal).
-    const claim = await SELF.fetch("https://nostrbook.net/dashboard/claim", {
+    const claim = await SELF.fetch("https://nbread.lol/dashboard/claim", {
       method: "POST",
       headers: { Cookie: aliceCookie, "CF-Connecting-IP": "10.1.1.3" },
       body: new URLSearchParams({ handle: "alice2" }),
@@ -309,13 +309,13 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     );
     expect(unblock.status).toBe(303);
 
-    const restored = await SELF.fetch("https://alice.nostrbook.net/");
+    const restored = await SELF.fetch("https://alice.nbread.lol/");
     expect(restored.status).toBe(200);
     expect(await restored.text()).toContain("Hello world");
 
     // Preview works again post-unblock (blocked gate, not a lingering state).
     const previewRestored = await SELF.fetch(
-      "https://nostrbook.net/dashboard/preview",
+      "https://nbread.lol/dashboard/preview",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: aliceCookie },
@@ -325,7 +325,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
     expect(previewRestored.status).toBe(200);
 
     const nip05Restored = await SELF.fetch(
-      "https://nostrbook.net/.well-known/nostr.json?name=alice",
+      "https://nbread.lol/.well-known/nostr.json?name=alice",
     );
     expect(
       ((await nip05Restored.json()) as { names: Record<string, string> })
@@ -334,7 +334,7 @@ describe("block → everywhere → unblock (alice, claimed)", () => {
 
     await resetDiscoverCache();
     const discoverRestored = await SELF.fetch(
-      "https://nostrbook.net/discover",
+      "https://nbread.lol/discover",
     );
     expect(await discoverRestored.text()).toContain("Hello world");
   });
@@ -352,13 +352,13 @@ describe("block by npub (mallory, never claimed)", () => {
     // The npub view 404s WITHOUT any relay contact (resolveNpub checks the
     // users row first).
     const view = await SELF.fetch(
-      `https://nostrbook.net/${npubEncode(MALLORY_PK)}`,
+      `https://nbread.lol/${npubEncode(MALLORY_PK)}`,
       { headers: { "CF-Connecting-IP": "10.1.2.1" } },
     );
     expect(view.status).toBe(404);
 
     // The blocked key cannot claim a handle.
-    const claim = await SELF.fetch("https://nostrbook.net/dashboard/claim", {
+    const claim = await SELF.fetch("https://nbread.lol/dashboard/claim", {
       method: "POST",
       headers: { Cookie: malloryCookie, "CF-Connecting-IP": "10.1.2.2" },
       body: new URLSearchParams({ handle: "mallory" }),
@@ -367,7 +367,7 @@ describe("block by npub (mallory, never claimed)", () => {
     expect(await claim.text()).toContain("blocked");
 
     // The admin page lists the blocked key for later unblocking.
-    const page = await SELF.fetch("https://nostrbook.net/admin", {
+    const page = await SELF.fetch("https://nbread.lol/admin", {
       headers: { Cookie: adminCookie },
     });
     expect(await page.text()).toContain(npubEncode(MALLORY_PK));
@@ -378,7 +378,7 @@ describe("block by npub (mallory, never claimed)", () => {
       { cookie: adminCookie },
     );
     expect(unblock.status).toBe(303);
-    const claim2 = await SELF.fetch("https://nostrbook.net/dashboard/claim", {
+    const claim2 = await SELF.fetch("https://nbread.lol/dashboard/claim", {
       method: "POST",
       headers: { Cookie: malloryCookie, "CF-Connecting-IP": "10.1.2.3" },
       body: new URLSearchParams({ handle: "mallory" }),

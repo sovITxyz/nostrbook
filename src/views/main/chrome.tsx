@@ -19,7 +19,7 @@ export function SiteHeader(props: {
   return (
     <header class="site-header">
       <a class="site-brand" href="/">
-        <LogoMark size={28} /> Nostrbook
+        <LogoMark size={28} /> nbread.lol
       </a>
       <nav class="site-nav-links">
         <a href="/discover" aria-current={cur("discover")}>
@@ -50,7 +50,7 @@ export function SiteFooter() {
       <p>
         <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·{" "}
         <a href="/docs">Docs</a> ·{" "}
-        <a href="https://github.com/sovITxyz/nostrbook" rel="noopener">
+        <a href="https://github.com/sovITxyz/nbread" rel="noopener">
           Source (AGPL)
         </a>
       </p>

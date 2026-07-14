@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Nostrbook smoke tests. Grows every phase.
+# nbread.lol smoke tests. Grows every phase.
 #
 # Usage:
 #   bash scripts/smoke.sh local                 # boots wrangler dev, tests, kills it
-#   bash scripts/smoke.sh https://nostrbook.net # tests an already-running deployment
+#   bash scripts/smoke.sh https://nbread.lol # tests an already-running deployment
 set -euo pipefail
 
 TARGET="${1:-local}"
@@ -22,14 +22,14 @@ trap cleanup EXIT
 
 if [[ "$TARGET" == "local" ]]; then
   BASE="http://127.0.0.1:8787"
-  MAIN_HOST="nostrbook.net"
+  MAIN_HOST="nbread.lol"
   if curl -sf -o /dev/null --max-time 2 "$BASE/healthz" 2>/dev/null; then
     echo "FAIL: something is already listening on :8787 — kill it first" >&2
     echo "      (otherwise these checks would silently test a stale server)" >&2
     exit 1
   fi
   echo "==> applying D1 migrations (local)"
-  npx wrangler d1 migrations apply nostrbook --local >/dev/null
+  npx wrangler d1 migrations apply nbread --local >/dev/null
   echo "==> starting wrangler dev on :8787"
   # ENVIRONMENT=development enables the dev-only X-Forwarded-Host override the
   # checks below rely on (wrangler.jsonc ships production; --var also covers
@@ -140,7 +140,7 @@ check_post() {
 
 # --- P0: hello checks ---------------------------------------------------------
 check "apex / responds 200" 200 "$MAIN_HOST" "/"
-check_body_contains "apex / mentions Nostrbook" "Nostrbook"
+check_body_contains "apex / mentions nbread.lol" "nbread.lol"
 check "apex /healthz responds 200" 200 "$MAIN_HOST" "/healthz"
 check_body_contains "healthz reports ok" '"ok":true'
 if [[ "$SUBDOMAINS" == 1 ]]; then
@@ -195,7 +195,7 @@ check_header_contains "discover sends a public s-maxage" "s-maxage"
 check "discover clamps garbage paging" 200 "$MAIN_HOST" "/discover?page=-999"
 # page=-999 clamps to page 1, which the first /discover check primed into the
 # Cache API — a real cache layer (review fix), not just an advisory header.
-check_header_contains "discover repeat serves from the Worker cache" "x-nostrbook-cache: hit"
+check_header_contains "discover repeat serves from the Worker cache" "x-nbread-cache: hit"
 check "search form responds 200" 200 "$MAIN_HOST" "/search"
 check_body_contains "search page ships the form" 'name="q"'
 check "search with a query responds 200" 200 "$MAIN_HOST" "/search?q=hello"

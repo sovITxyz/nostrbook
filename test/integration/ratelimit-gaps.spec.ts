@@ -51,12 +51,12 @@ describe("npub view limiter", () => {
       NPUB_VIEW_RATE_MAX,
       NPUB_VIEW_RATE_WINDOW_SECONDS,
     );
-    const denied = await SELF.fetch(`https://nostrbook.net/${badNpub}`, {
+    const denied = await SELF.fetch(`https://nbread.lol/${badNpub}`, {
       headers: { "CF-Connecting-IP": "6.6.6.6" },
     });
     expect(denied.status).toBe(429);
 
-    const other = await SELF.fetch(`https://nostrbook.net/${badNpub}`, {
+    const other = await SELF.fetch(`https://nbread.lol/${badNpub}`, {
       headers: { "CF-Connecting-IP": "7.7.7.7" },
     });
     expect(other.status).toBe(404); // normal not-found, not rate limited
@@ -69,7 +69,7 @@ describe("npub view limiter", () => {
       NPUB_VIEW_RATE_WINDOW_SECONDS,
     );
     const denied = await SELF.fetch(
-      `https://nostrbook.net/${badNpub}/rss.xml`,
+      `https://nbread.lol/${badNpub}/rss.xml`,
       { headers: { "CF-Connecting-IP": "6.6.6.7" } },
     );
     expect(denied.status).toBe(429);
@@ -81,7 +81,7 @@ describe("logout limiter", () => {
     const token = await createSession(env, ALICE_PK);
     await seedCounter("logout:ip:6.6.7.1", LOGOUT_MAX, 15 * 60);
 
-    const denied = await SELF.fetch("https://nostrbook.net/logout", {
+    const denied = await SELF.fetch("https://nbread.lol/logout", {
       method: "POST",
       headers: { "CF-Connecting-IP": "6.6.7.1", Cookie: `sid=${token}` },
     });
@@ -90,7 +90,7 @@ describe("logout limiter", () => {
     expect(await env.KV.get(sessionKey(token))).not.toBeNull();
 
     // A fresh IP logs out normally and the session dies.
-    const ok = await SELF.fetch("https://nostrbook.net/logout", {
+    const ok = await SELF.fetch("https://nbread.lol/logout", {
       method: "POST",
       headers: { "CF-Connecting-IP": "6.6.7.2", Cookie: `sid=${token}` },
     });
@@ -105,19 +105,19 @@ describe("dashboard view limiter", () => {
     const bobCookie = await sessionCookieFor(BOB_PK);
     await seedCounter(`dash:pk:${ALICE_PK}`, DASHBOARD_VIEW_MAX, 5 * 60);
 
-    const denied = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const denied = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: aliceCookie },
     });
     expect(denied.status).toBe(429);
 
-    const ok = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const ok = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: bobCookie },
     });
     expect(ok.status).toBe(200);
   });
 
   it("anonymous dashboard requests still redirect (no limiter spend)", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       redirect: "manual",
     });
     expect(res.status).toBe(302);

@@ -1,5 +1,5 @@
 -- Migration number: 0001    init
--- Nostrbook base schema (see docs/phases/CONTRACTS.md).
+-- nbread.lol base schema (see docs/phases/CONTRACTS.md).
 
 CREATE TABLE users    (pubkey TEXT PRIMARY KEY, handle TEXT UNIQUE COLLATE NOCASE,
                        claimed_at TEXT NOT NULL, settings TEXT NOT NULL DEFAULT '{}',

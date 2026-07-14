@@ -112,7 +112,7 @@ describe("mirrorEvent — store + render-at-ingest", () => {
     expect(rows[0]!.rendered).toBeNull(); // only 30023 rows are rendered
     const profile = await getProfile(env, aliceProfile.pubkey);
     expect(profile?.name).toBe("alice-test");
-    expect(profile?.nip05).toBe("alice@nostrbook.net");
+    expect(profile?.nip05).toBe("alice@nbread.lol");
   });
 });
 

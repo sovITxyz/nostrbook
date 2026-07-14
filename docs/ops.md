@@ -1,4 +1,4 @@
-# Nostrbook operations (P7)
+# nbread.lol operations (P7)
 
 Hardening + launch reference: security headers, the full per-endpoint
 rate-limit/cache inventory, WAF dashboard settings, free-tier incident notes,
@@ -13,8 +13,8 @@ every Worker response is stamped — guard 404s (unknown/spoofed hosts), tenant
 
 | Class | Applies to | CSP | Extra |
 | ----- | ---------- | --- | ----- |
-| **Blog** | `<handle>.nostrbook.net` (all paths) AND apex `/npub1…` views | `default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; media-src *; base-uri 'none'; form-action 'none'` | no XFO (embeddable **by design** — see notes) |
-| **Apex** | everything else on `nostrbook.net` (+ unknown-host 404s) | `default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src * data:; media-src *; connect-src 'self' wss:; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` | `X-Frame-Options: DENY` |
+| **Blog** | `<handle>.nbread.lol` (all paths) AND apex `/npub1…` views | `default-src 'none'; img-src * data:; style-src 'self' 'unsafe-inline'; media-src *; base-uri 'none'; form-action 'none'` | no XFO (embeddable **by design** — see notes) |
+| **Apex** | everything else on `nbread.lol` (+ unknown-host 404s) | `default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src * data:; media-src *; connect-src 'self' wss:; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` | `X-Frame-Options: DENY` |
 
 Both classes always send `X-Content-Type-Options: nosniff` and
 `Referrer-Policy: strict-origin-when-cross-origin`.
@@ -63,7 +63,7 @@ closed** (a D1 error denies). Denied requests still count. Sessions are
 permissionless (anyone with a keypair can mint one), so per-pubkey limits are
 abuse bounds, not politeness.
 
-### Apex (nostrbook.net)
+### Apex (nbread.lol)
 
 | Endpoint | Limiter (key → max/window) | Cache | Per-request cost / bound |
 | -------- | -------------------------- | ----- | ------------------------ |
@@ -89,7 +89,7 @@ abuse bounds, not politeness.
 CSRF (Origin / Sec-Fetch-Site same-origin proof) covers **every** unsafe
 method on the apex, `/admin` and `/api` included.
 
-### Blog subdomains (`<handle>.nostrbook.net`)
+### Blog subdomains (`<handle>.nbread.lol`)
 
 | Endpoint | Limiter | Cache | Per-request cost |
 | -------- | ------- | ----- | ---------------- |
@@ -114,7 +114,7 @@ per run.
 Nothing else writes KV. P7 added **no new KV write classes** — admin bumps
 are ordinary gen bumps.
 
-## 3. WAF setup (Cloudflare dashboard, zone `nostrbook.net`)
+## 3. WAF setup (Cloudflare dashboard, zone `nbread.lol`)
 
 Application-level limits above bound *single-source* abuse; the WAF is the
 *distributed/volumetric* backstop (and keeps scanner noise off the Worker
@@ -129,7 +129,7 @@ them.** Configure once after Gate B:
 
 - **Rule name**: `global-per-ip-throttle`
 - **If incoming requests match**: preferred expression
-  `(http.host eq "nostrbook.net") or (http.host wildcard "*.nostrbook.net")`.
+  `(http.host eq "nbread.lol") or (http.host wildcard "*.nbread.lol")`.
   **Free-plan caveat**: rate-limiting rule expressions restrict the field set
   (`http.host` and the `wildcard` operator are plan-gated on some accounts).
   If the dashboard rejects it, use the guaranteed-configurable fallback: the
@@ -242,17 +242,17 @@ on the release commit, and `bash scripts/smoke.sh local` green.
 ### Secrets & bindings checklist (once per account)
 
 ```sh
-wrangler d1 create nostrbook          # paste database_id into wrangler.jsonc
+wrangler d1 create nbread          # paste database_id into wrangler.jsonc
 wrangler kv namespace create KV       # paste id into wrangler.jsonc
-wrangler d1 migrations apply nostrbook --remote
+wrangler d1 migrations apply nbread --remote
 
 wrangler secret put TURNSTILE_SECRET_KEY   # from the Turnstile widget (see below)
 wrangler secret put ADMIN_PUBKEY           # OPTIONAL — omit to launch with /admin disabled
 ```
 
-- Create the Turnstile widget (dashboard → Turnstile) for `nostrbook.net`
+- Create the Turnstile widget (dashboard → Turnstile) for `nbread.lol`
   **and add the workers.dev preview hostname** (e.g.
-  `nostrbook.<account>.workers.dev`) to the widget's hostnames so Gate A can
+  `nbread.<account>.workers.dev`) to the widget's hostnames so Gate A can
   exercise the claim flow. Put the site key in `wrangler.jsonc`
   `vars.TURNSTILE_SITE_KEY`.
 - `vars.ENVIRONMENT` stays `"production"` in the committed config (the
@@ -260,47 +260,47 @@ wrangler secret put ADMIN_PUBKEY           # OPTIONAL — omit to launch with /a
 
 ### Gate A — workers.dev preview
 
-The zone `nostrbook.net` must already exist on the account (add it per
+The zone `nbread.lol` must already exist on the account (add it per
 `docs/setup.md` §1 — routes can attach while DNS still points elsewhere;
 user traffic is unaffected because no DNS records exist yet).
 
 ```sh
 # Deploy with MAIN_HOST overridden to the preview host so the host guard
-# treats workers.dev as the apex (the committed var stays nostrbook.net):
-npx wrangler deploy --var MAIN_HOST:nostrbook.<account>.workers.dev
+# treats workers.dev as the apex (the committed var stays nbread.lol):
+npx wrangler deploy --var MAIN_HOST:nbread.<account>.workers.dev
 
 # Smoke vs the preview URL (subdomain checks auto-skip on workers.dev):
-bash scripts/smoke.sh https://nostrbook.<account>.workers.dev
+bash scripts/smoke.sh https://nbread.<account>.workers.dev
 ```
 
 Gate A passes when: CI is green, preview smoke is green, and a manual
 login → claim → publish loop works on the preview (needs a NIP-07 extension;
 see the manual-check notes at the bottom of `scripts/smoke.sh`).
 
-### Gate B — nostrbook.net live
+### Gate B — nbread.lol live
 
 1. **DNS** (per `docs/setup.md` §2): apex `A @ 192.0.2.1` **Proxied** +
-   wildcard `CNAME * nostrbook.net` **Proxied**. SSL/TLS **Full (strict)**;
-   confirm Universal SSL covers `nostrbook.net` + `*.nostrbook.net`.
+   wildcard `CNAME * nbread.lol` **Proxied**. SSL/TLS **Full (strict)**;
+   confirm Universal SSL covers `nbread.lol` + `*.nbread.lol`.
    Then, under SSL/TLS → **Edge Certificates**: enable **Always Use HTTPS**
    and **HSTS** with `max-age` ≥ 6 months (15552000). Sessions are Secure
    host-only cookies on the apex; without zone HSTS a first-visit `http://`
    navigation is interceptable before the 301. Hold off
    `includeSubDomains`/preload until tenant subdomains are confirmed stable
    on TLS (a preloaded broken wildcard is unrecoverable for months).
-2. **Deploy the committed config** (restores `MAIN_HOST=nostrbook.net`):
+2. **Deploy the committed config** (restores `MAIN_HOST=nbread.lol`):
 
    ```sh
    npx wrangler deploy
    ```
 
-3. Verify both routes (`nostrbook.net/*`, `*.nostrbook.net/*`) appear under
+3. Verify both routes (`nbread.lol/*`, `*.nbread.lol/*`) appear under
    the zone's Workers Routes page and the cron shows under the Worker's
    Triggers tab.
 4. **Smoke vs prod** (includes subdomain + header checks):
 
    ```sh
-   bash scripts/smoke.sh https://nostrbook.net
+   bash scripts/smoke.sh https://nbread.lol
    ```
 
 5. **Observe the cron**: `npx wrangler tail --format=pretty` across one
@@ -308,8 +308,8 @@ see the manual-check notes at the bottom of `scripts/smoke.sh`).
 6. **Acceptance**: claim a test blog with a real NIP-07 key (login → claim →
    publish via the editor, or publish a NIP-23 post from any Nostr client
    and wait ≤15 min for the cron) and confirm
-   `https://<handle>.nostrbook.net/` renders the relay content, RSS
-   validates, and `https://nostrbook.net/.well-known/nostr.json?name=<handle>`
+   `https://<handle>.nbread.lol/` renders the relay content, RSS
+   validates, and `https://nbread.lol/.well-known/nostr.json?name=<handle>`
    answers.
 7. **WAF**: configure §3 (rate rule + scanner-path block). The preferred
    expressions use fields/functions whose free-plan availability varies by

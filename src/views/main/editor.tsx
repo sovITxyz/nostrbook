@@ -90,7 +90,7 @@ export function EditorPage(props: {
 
   return (
     <Layout
-      title={isEdit ? "Edit post — Nostrbook" : "New post — Nostrbook"}
+      title={isEdit ? "Edit post — nbread.lol" : "New post — nbread.lol"}
       bodyClass="editor-wide"
     >
       <SiteHeader variant="app" />

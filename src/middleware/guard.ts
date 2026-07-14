@@ -39,10 +39,10 @@ export function normalizeHostname(raw: string): string | null {
  * Host guard: classifies the request Host header before anything else runs.
  *
  * Accepted host classes:
- *   - MAIN_HOST exactly (e.g. nostrbook.net)          → passes, host=MAIN_HOST
+ *   - MAIN_HOST exactly (e.g. nbread.lol)          → passes, host=MAIN_HOST
  *   - single valid DNS label subdomain (alice.…)      → passes, host as-is
  *   - localhost / 127.0.0.1 / [::1] (wrangler dev)    → treated as MAIN_HOST
- * Everything else (nostrbook.net.evil.com, deep.sub.nostrbook.net, malformed
+ * Everything else (nbread.lol.evil.com, deep.sub.nbread.lol, malformed
  * or hostile labels, missing host, unrelated domains) → 404.
  *
  * The guard is the contracted choke point for host input: everything
@@ -57,7 +57,7 @@ export const guard: MiddlewareHandler<AppEnv> = async (c, next) => {
   // DEV ONLY: wrangler dev's proxy rewrites the Host header to the first
   // configured route, which makes subdomains untestable locally. When (and
   // only when) ENVIRONMENT === "development", allow X-Forwarded-Host to
-  // override so `curl -H 'X-Forwarded-Host: alice.nostrbook.net'` works.
+  // override so `curl -H 'X-Forwarded-Host: alice.nbread.lol'` works.
   // The committed wrangler.jsonc ships ENVIRONMENT=production, so a stock
   // `wrangler deploy` fails closed and this header is ignored entirely
   // (it is client-spoofable). Dev gets ENVIRONMENT=development from
@@ -96,6 +96,6 @@ export const guard: MiddlewareHandler<AppEnv> = async (c, next) => {
     }
   }
 
-  // Unknown / spoofed / malformed host class (e.g. nostrbook.net.evil.com).
+  // Unknown / spoofed / malformed host class (e.g. nbread.lol.evil.com).
   return c.text("Not found", 404);
 };

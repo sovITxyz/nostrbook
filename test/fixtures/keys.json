@@ -1,5 +1,5 @@
 {
-  "WARNING": "THROWAWAY TEST KEYS for Nostrbook fixtures only. Trivial patterns, publicly committed — NEVER use for anything real.",
+  "WARNING": "THROWAWAY TEST KEYS for nbread.lol fixtures only. Trivial patterns, publicly committed — NEVER use for anything real.",
   "alice": {
     "sk": "0101010101010101010101010101010101010101010101010101010101010101",
     "pk": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f"

@@ -68,9 +68,9 @@ const profiles: Record<string, NostrEvent> = {
     tags: [],
     content: JSON.stringify({
       name: "alice-test",
-      about: "Nostrbook throwaway test profile (alice)",
+      about: "nbread.lol throwaway test profile (alice)",
       picture: "https://example.com/alice.png",
-      nip05: "alice@nostrbook.net",
+      nip05: "alice@nbread.lol",
     }),
   }),
   bob: sign(bob, {
@@ -79,7 +79,7 @@ const profiles: Record<string, NostrEvent> = {
     tags: [],
     content: JSON.stringify({
       name: "bob-test",
-      about: "Nostrbook throwaway test profile (bob)",
+      about: "nbread.lol throwaway test profile (bob)",
     }),
   }),
   mallory: sign(mallory, {
@@ -88,7 +88,7 @@ const profiles: Record<string, NostrEvent> = {
     tags: [],
     content: JSON.stringify({
       name: "mallory-test",
-      about: "Nostrbook throwaway test profile (mallory)",
+      about: "nbread.lol throwaway test profile (mallory)",
     }),
   }),
 };
@@ -185,7 +185,7 @@ const posts: Record<string, NostrEvent> = {
     tags: [
       ["d", "hello-world"],
       ["title", "Hello world"],
-      ["summary", "Alice's first Nostrbook test post"],
+      ["summary", "Alice's first nbread.lol test post"],
       ["published_at", String(T0 + 100)],
     ],
     content: "# Hello world\n\nThis is **alice**'s first post.\n",
@@ -473,7 +473,7 @@ writeFileSync(
   JSON.stringify(
     {
       WARNING:
-        "THROWAWAY TEST KEYS for Nostrbook fixtures only. Trivial patterns, publicly committed — NEVER use for anything real.",
+        "THROWAWAY TEST KEYS for nbread.lol fixtures only. Trivial patterns, publicly committed — NEVER use for anything real.",
       alice: { sk: alice.sk, pk: alice.pk },
       bob: { sk: bob.sk, pk: bob.pk },
       mallory: { sk: mallory.sk, pk: mallory.pk },

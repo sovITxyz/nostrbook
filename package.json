@@ -1,9 +1,9 @@
 {
-  "name": "nostrbook",
+  "name": "nbread",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Nostr-native blogging platform on Cloudflare Workers — posts are NIP-23 events, blogs live at handle.nostrbook.net",
+  "description": "Nostr-native blogging platform on Cloudflare Workers — posts are NIP-23 events, blogs live at handle.nbread.lol",
   "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "wrangler dev",
@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "fixtures": "node --experimental-strip-types scripts/gen-fixtures.ts",
-    "migrate:local": "wrangler d1 migrations apply nostrbook --local",
+    "migrate:local": "wrangler d1 migrations apply nbread --local",
     "smoke": "bash scripts/smoke.sh local",
     "cf-typegen": "wrangler types"
   },

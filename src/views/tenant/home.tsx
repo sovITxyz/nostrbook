@@ -25,7 +25,7 @@ export function BlogHome(props: {
 
   return (
     <BlogLayout
-      title={`${name} — Nostrbook`}
+      title={`${name} — nbread.lol`}
       handle={props.handle}
       mainHost={props.mainHost}
       profile={props.profile}

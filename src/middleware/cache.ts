@@ -22,7 +22,7 @@ export function defaultCache(): EdgeCache {
 }
 
 /** Response header exposing hit/miss so tests (and ops) can observe caching. */
-export const CACHE_STATUS_HEADER = "X-Nostrbook-Cache";
+export const CACHE_STATUS_HEADER = "X-Nbread-Cache";
 
 /**
  * Cache key per contract: https://cache.internal/<host><path>?g=<gen>.

@@ -135,7 +135,7 @@ md.linkify.set({ fuzzyLink: true, fuzzyEmail: true, fuzzyIP: false });
 md.linkify.add("ftp:", null);
 md.linkify.add("//", null);
 
-md.core.ruler.push("nostrbook_heading_ids", headingIds);
+md.core.ruler.push("nbread_heading_ids", headingIds);
 
 /**
  * Cap on rendered markdown input. Anything larger is truncated before

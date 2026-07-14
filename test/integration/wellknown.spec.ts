@@ -11,7 +11,7 @@ type Nip05Body = {
 
 async function nip05(query: string): Promise<{ res: Response; body: Nip05Body }> {
   const res = await SELF.fetch(
-    `https://nostrbook.net/.well-known/nostr.json${query}`,
+    `https://nbread.lol/.well-known/nostr.json${query}`,
   );
   const body = (await res.json()) as Nip05Body;
   return { res, body };
@@ -62,7 +62,7 @@ describe("/.well-known/nostr.json (NIP-05)", () => {
 
   it("is apex-only (blog subdomains 404)", async () => {
     const res = await SELF.fetch(
-      "https://alice.nostrbook.net/.well-known/nostr.json?name=alice",
+      "https://alice.nbread.lol/.well-known/nostr.json?name=alice",
     );
     expect(res.status).toBe(404);
   });

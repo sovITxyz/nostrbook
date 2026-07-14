@@ -5,8 +5,8 @@ import { SiteHeader, SiteFooter } from "./chrome";
 export function TermsPage() {
   return (
     <Layout
-      title="Terms — Nostrbook"
-      description="The deal: you own your content, Nostrbook mirrors and renders it, don't abuse the service."
+      title="Terms — nbread.lol"
+      description="The deal: you own your content, nbread.lol mirrors and renders it, don't abuse the service."
     >
       <SiteHeader />
       <main class="info-page">
@@ -16,7 +16,7 @@ export function TermsPage() {
         <h2>Your content</h2>
         <p>
           You own your content — posts are your signed Nostr events. By
-          publishing here you grant Nostrbook the right to mirror, render,
+          publishing here you grant nbread.lol the right to mirror, render,
           and distribute them; that <em>is</em> the service.
         </p>
 
@@ -48,7 +48,7 @@ export function TermsPage() {
         <h2>Contact</h2>
         <p>
           <a href="mailto:git@sovit.xyz">git@sovit.xyz</a> or the{" "}
-          <a href="https://github.com/sovITxyz/nostrbook">GitHub repo</a>.
+          <a href="https://github.com/sovITxyz/nbread">GitHub repo</a>.
         </p>
       </main>
       <SiteFooter />

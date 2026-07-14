@@ -3,7 +3,7 @@ import { Layout } from "../layout";
 /** 404 page for blog subdomains (unknown slug / unknown path). */
 export function NotFoundPage(props: { handle?: string }) {
   return (
-    <Layout title="Not found — Nostrbook">
+    <Layout title="Not found — nbread.lol">
       <main class="not-found">
         <h1>404</h1>
         <p>

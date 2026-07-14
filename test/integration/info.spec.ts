@@ -13,7 +13,7 @@ const INFO_PAGES = [
 describe("info pages (/privacy /terms /docs)", () => {
   for (const { path, needle } of INFO_PAGES) {
     it(`${path} serves cacheable static HTML with the shared chrome`, async () => {
-      const res = await SELF.fetch(`https://nostrbook.net${path}`);
+      const res = await SELF.fetch(`https://nbread.lol${path}`);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/html");
       expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
@@ -30,14 +30,14 @@ describe("info pages (/privacy /terms /docs)", () => {
 
   it("every info page links the AGPL source repo", async () => {
     for (const { path } of INFO_PAGES) {
-      const res = await SELF.fetch(`https://nostrbook.net${path}`);
+      const res = await SELF.fetch(`https://nbread.lol${path}`);
       const html = await res.text();
-      expect(html, path).toContain("github.com/sovITxyz/nostrbook");
+      expect(html, path).toContain("github.com/sovITxyz/nbread");
     }
     // The license itself is named where it matters.
-    const privacy = await SELF.fetch("https://nostrbook.net/privacy");
+    const privacy = await SELF.fetch("https://nbread.lol/privacy");
     expect(await privacy.text()).toContain("AGPL");
-    const docs = await SELF.fetch("https://nostrbook.net/docs");
+    const docs = await SELF.fetch("https://nbread.lol/docs");
     expect(await docs.text()).toContain("AGPL");
   });
 });
@@ -45,7 +45,7 @@ describe("info pages (/privacy /terms /docs)", () => {
 describe("apex 404", () => {
   it("an unknown apex path renders the HTML 404 page", async () => {
     const res = await SELF.fetch(
-      "https://nostrbook.net/definitely-not-a-page",
+      "https://nbread.lol/definitely-not-a-page",
     );
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).toContain("text/html");
@@ -58,7 +58,7 @@ describe("apex 404", () => {
 
   it("an unknown /api path stays a plain-text 404 (no markup)", async () => {
     const res = await SELF.fetch(
-      "https://nostrbook.net/api/definitely-not-a-page",
+      "https://nbread.lol/api/definitely-not-a-page",
     );
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).not.toContain("text/html");

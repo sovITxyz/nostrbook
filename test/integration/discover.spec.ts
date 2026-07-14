@@ -1,4 +1,4 @@
-// P6 discover feed (nostrbook.net/discover) + polished landing, end-to-end
+// P6 discover feed (nbread.lol/discover) + polished landing, end-to-end
 // via SELF.fetch. Exercises the cross-tenant scoping trap: the events table
 // also holds unclaimed-npub mirrors and soft-deleted rows — none of those may
 // ever surface here.
@@ -114,7 +114,7 @@ async function seedFlood(): Promise<void> {
 }
 
 async function getDiscover(path = "/discover"): Promise<Response> {
-  return SELF.fetch(`https://nostrbook.net${path}`);
+  return SELF.fetch(`https://nbread.lol${path}`);
 }
 
 describe("discover feed (P6)", () => {
@@ -138,10 +138,10 @@ describe("discover feed (P6)", () => {
     // created_at DESC: bobFirst (…400) > aliceXss (…300) > aliceTorture (…200)
     // > aliceHello (…100), asserted via each post's absolute blog URL.
     const order = [
-      'href="https://bob.nostrbook.net/bob-first"',
-      'href="https://alice.nostrbook.net/xss-test"',
-      'href="https://alice.nostrbook.net/markdown-torture"',
-      'href="https://alice.nostrbook.net/hello-world"',
+      'href="https://bob.nbread.lol/bob-first"',
+      'href="https://alice.nbread.lol/xss-test"',
+      'href="https://alice.nbread.lol/markdown-torture"',
+      'href="https://alice.nbread.lol/hello-world"',
     ].map((needle) => {
       const at = html.indexOf(needle);
       expect(at, needle).toBeGreaterThan(-1);
@@ -151,7 +151,7 @@ describe("discover feed (P6)", () => {
     // Author attribution links to the blog home.
     expect(html).toContain("@bob");
     expect(html).toContain("@alice");
-    expect(html).toContain('href="https://alice.nostrbook.net/"');
+    expect(html).toContain('href="https://alice.nbread.lol/"');
     // Titles/summaries come from tag strings as escaped text.
     expect(html).toContain("Markdown torture test");
     expect(html).toContain("Every markdown feature in one post");
@@ -222,7 +222,7 @@ describe("discover feed (P6)", () => {
           .run();
 
         // A cache HIT never touches the limiter — still 200 for this IP.
-        const hit = await SELF.fetch("https://nostrbook.net/discover", {
+        const hit = await SELF.fetch("https://nbread.lol/discover", {
           headers: { "CF-Connecting-IP": ip },
         });
         expect(hit.status).toBe(200);
@@ -230,7 +230,7 @@ describe("discover feed (P6)", () => {
 
         // An uncached page (miss) is denied with a friendly 429 page.
         const denied = await SELF.fetch(
-          "https://nostrbook.net/discover?page=2",
+          "https://nbread.lol/discover?page=2",
           { headers: { "CF-Connecting-IP": ip } },
         );
         if (denied.status === 200 && attempt === 0) continue; // window flipped
@@ -240,7 +240,7 @@ describe("discover feed (P6)", () => {
         expect(findXssVectors(html, "page")).toEqual([]);
         // The 429 was NOT cached: another client misses page 2 fresh (200).
         const other = await SELF.fetch(
-          "https://nostrbook.net/discover?page=2",
+          "https://nbread.lol/discover?page=2",
           { headers: { "CF-Connecting-IP": "203.0.113.98" } },
         );
         expect(other.status).toBe(200);
@@ -338,7 +338,7 @@ describe("discover feed (P6)", () => {
 
     it("drops a post from the feed once its kind 5 delete is mirrored", async () => {
       let html = await (await getDiscover()).text();
-      expect(html).toContain('href="https://alice.nostrbook.net/hello-world"');
+      expect(html).toContain('href="https://alice.nbread.lol/hello-world"');
       expect(await mirrorEvent(env, deleteHello, { bumpGen: false })).toBe(
         "stored",
       );
@@ -347,10 +347,10 @@ describe("discover feed (P6)", () => {
       await resetDiscoverCache();
       html = await (await getDiscover()).text();
       expect(html).not.toContain(
-        'href="https://alice.nostrbook.net/hello-world"',
+        'href="https://alice.nbread.lol/hello-world"',
       );
       // The others stay.
-      expect(html).toContain('href="https://bob.nostrbook.net/bob-first"');
+      expect(html).toContain('href="https://bob.nbread.lol/bob-first"');
     });
   });
 
@@ -380,7 +380,7 @@ describe("discover feed (P6)", () => {
       const page4 = await (await getDiscover("/discover?page=4")).text();
       expect(page4).toContain("Flood post 05");
       expect(page4).toContain("Flood post 01");
-      expect(page4).toContain('href="https://alice.nostrbook.net/hello-world"');
+      expect(page4).toContain('href="https://alice.nbread.lol/hello-world"');
       expect(page4).not.toContain('rel="next"');
       expect(page4).toContain('rel="prev"');
     });
@@ -452,10 +452,10 @@ describe("discover feed (P6)", () => {
 
 describe("landing page (P6 polish)", () => {
   it("pitches the product and carries the login CTA", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/");
+    const res = await SELF.fetch("https://nbread.lol/");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Nostrbook");
+    expect(html).toContain("nbread.lol");
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/discover"');
     expect(html).toContain('href="/search"');

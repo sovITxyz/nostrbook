@@ -186,9 +186,9 @@
             tags: tags,
             content: content,
           },
-          "Publishing to Nostrbook…",
+          "Publishing to nbread.lol…",
         );
-        if (window.NostrbookDraft) window.NostrbookDraft.clear();
+        if (window.NbreadDraft) window.NbreadDraft.clear();
         window.location.href = "/dashboard";
         return;
       } catch (e) {
@@ -222,11 +222,11 @@
             kind: 5,
             created_at: nextCreatedAt(),
             tags: tags,
-            content: "Deleted via Nostrbook",
+            content: "Deleted via nbread.lol",
           },
           "Deleting…",
         );
-        if (window.NostrbookDraft) window.NostrbookDraft.clear();
+        if (window.NbreadDraft) window.NbreadDraft.clear();
         window.location.href = "/dashboard";
         return;
       } catch (e) {
@@ -238,7 +238,7 @@
   }
 
   // Preview renders lazily — on Preview-tab activation (editor-toolbar.js
-  // dispatches "nostrbook:preview-requested") or via a legacy
+  // dispatches "nbread:preview-requested") or via a legacy
   // #preview-button when one exists — and is cached on exact string
   // identity: switching tabs without edits costs no request and none of the
   // preview rate-limit budget.
@@ -294,7 +294,7 @@
     }
   }
 
-  document.addEventListener("nostrbook:preview-requested", function () {
+  document.addEventListener("nbread:preview-requested", function () {
     runPreview();
   });
 

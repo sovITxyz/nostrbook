@@ -1,5 +1,5 @@
 /**
- * Nostrbook brand mark: a geometric ostrich reading an open book, served as
+ * nbread.lol brand mark: a geometric ostrich reading an open book, served as
  * a static asset (public/logo.svg) and referenced with <img>. An inline
  * <svg> would trip the findXssVectors test guard (which bans svg elements
  * in rendered documents as sanitizer defense-in-depth), so the mark ships

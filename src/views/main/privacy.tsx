@@ -5,8 +5,8 @@ import { SiteHeader, SiteFooter } from "./chrome";
 export function PrivacyPage() {
   return (
     <Layout
-      title="Privacy — Nostrbook"
-      description="What Nostrbook stores, what it doesn't, and why everything you publish here is public by design."
+      title="Privacy — nbread.lol"
+      description="What nbread.lol stores, what it doesn't, and why everything you publish here is public by design."
     >
       <SiteHeader />
       <main class="info-page">
@@ -67,9 +67,9 @@ export function PrivacyPage() {
 
         <h2>Source</h2>
         <p>
-          Nostrbook is open source under AGPL-3.0:{" "}
-          <a href="https://github.com/sovITxyz/nostrbook">
-            github.com/sovITxyz/nostrbook
+          nbread.lol is open source under AGPL-3.0:{" "}
+          <a href="https://github.com/sovITxyz/nbread">
+            github.com/sovITxyz/nbread
           </a>
           .
         </p>
@@ -78,7 +78,7 @@ export function PrivacyPage() {
         <p>
           Questions about this policy:{" "}
           <a href="mailto:git@sovit.xyz">git@sovit.xyz</a> or open an issue on{" "}
-          <a href="https://github.com/sovITxyz/nostrbook">GitHub</a>.
+          <a href="https://github.com/sovITxyz/nbread">GitHub</a>.
         </p>
       </main>
       <SiteFooter />

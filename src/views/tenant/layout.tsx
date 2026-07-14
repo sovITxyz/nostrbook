@@ -88,7 +88,7 @@ export function BlogLayout(props: {
         <footer class="blog-footer">
           <p>
             Published with{" "}
-            <a href={`https://${props.mainHost}/`}>Nostrbook</a>
+            <a href={`https://${props.mainHost}/`}>nbread.lol</a>
           </p>
         </footer>
       </body>

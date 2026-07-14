@@ -7,7 +7,7 @@ import { SiteHeader, SiteFooter } from "./chrome";
  */
 export function LoginPage() {
   return (
-    <Layout title="Sign in — Nostrbook">
+    <Layout title="Sign in — nbread.lol">
       <SiteHeader />
       <main>
         <h1>Sign in</h1>

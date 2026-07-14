@@ -28,7 +28,7 @@ export function DashboardPage(props: {
   settings: BlogSettings;
 }) {
   return (
-    <Layout title="Dashboard — Nostrbook">
+    <Layout title="Dashboard — nbread.lol">
       <SiteHeader variant="app" />
       <main>
         <h1>Dashboard</h1>
@@ -177,14 +177,19 @@ export function DashboardPage(props: {
             </p>
             <p>
               <label>
-                Relays (wss:// URLs, one per line)
+                Your relays (wss:// URLs, one per line)
+                <br />
+                <small>
+                  Add your own relays to broadcast and mirror from. Leave blank
+                  to use the nbread.lol defaults.
+                </small>
                 <br />
                 <textarea
                   name="relays"
                   rows={3}
                   cols={60}
                   spellcheck={false}
-                  placeholder={"wss://relay.damus.io\nwss://nos.lol"}
+                  placeholder={"wss://relay.damus.io\nwss://relay.primal.net"}
                 >
                   {props.settings.relays.join("\n")}
                 </textarea>

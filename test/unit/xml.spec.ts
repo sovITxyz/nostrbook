@@ -18,7 +18,7 @@ const dTagless: NostrEvent = {
 const opts = {
   title: "alice-test",
   description: "test blog",
-  baseUrl: "https://alice.nostrbook.net",
+  baseUrl: "https://alice.nbread.lol",
   handle: "alice",
   posts: [hello, dTagless],
 };
@@ -27,9 +27,9 @@ describe("d-tagless posts are excluded from feeds and sitemap", () => {
   it("rssFeed lists only addressable posts", () => {
     const xml = rssFeed(opts);
     expect(XMLValidator.validate(xml)).toBe(true);
-    expect(xml).toContain("<link>https://alice.nostrbook.net/hello-world</link>");
+    expect(xml).toContain("<link>https://alice.nbread.lol/hello-world</link>");
     // no item link collapsing onto the blog home
-    expect(xml).not.toContain("<link>https://alice.nostrbook.net/</link>\n<guid");
+    expect(xml).not.toContain("<link>https://alice.nbread.lol/</link>\n<guid");
     expect(xml.match(/<item>/g)?.length ?? 0).toBe(1);
   });
 
@@ -37,17 +37,17 @@ describe("d-tagless posts are excluded from feeds and sitemap", () => {
     const xml = atomFeed(opts);
     expect(XMLValidator.validate(xml)).toBe(true);
     expect(xml.match(/<entry>/g)?.length ?? 0).toBe(1);
-    expect(xml).toContain("<id>https://alice.nostrbook.net/hello-world</id>");
+    expect(xml).toContain("<id>https://alice.nbread.lol/hello-world</id>");
   });
 
   it("sitemapXml never emits the home <loc> twice", () => {
     const xml = sitemapXml({ baseUrl: opts.baseUrl, posts: opts.posts });
     expect(XMLValidator.validate(xml)).toBe(true);
     const homeLocs = xml.match(
-      /<loc>https:\/\/alice\.nostrbook\.net\/<\/loc>/g,
+      /<loc>https:\/\/alice\.nbread\.lol\/<\/loc>/g,
     );
     expect(homeLocs?.length ?? 0).toBe(1);
-    expect(xml).toContain("<loc>https://alice.nostrbook.net/hello-world</loc>");
+    expect(xml).toContain("<loc>https://alice.nbread.lol/hello-world</loc>");
   });
 
   it("feeds with ONLY a d-tagless post degrade to valid empty feeds", () => {

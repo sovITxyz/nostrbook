@@ -73,13 +73,13 @@ describe("isNpubPath (host-class selection)", () => {
 
 describe("apex class", () => {
   it("landing page carries the exact apex CSP + XFO DENY", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/");
+    const res = await SELF.fetch("https://nbread.lol/");
     expect(res.status).toBe(200);
     expectApexClass(res);
   });
 
   it("login page (ships JS) still fits inside the apex CSP", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/login");
+    const res = await SELF.fetch("https://nbread.lol/login");
     expect(res.status).toBe(200);
     expectApexClass(res);
     // The CSP must actually permit what the page uses: same-origin scripts.
@@ -92,7 +92,7 @@ describe("apex class", () => {
   });
 
   it("redirects carry headers too (anonymous /dashboard → /login)", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const res = await SELF.fetch("https://nbread.lol/dashboard", {
       redirect: "manual",
     });
     expect(res.status).toBe(302);
@@ -100,14 +100,14 @@ describe("apex class", () => {
   });
 
   it("apex 404s carry headers", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/no-such-page");
+    const res = await SELF.fetch("https://nbread.lol/no-such-page");
     expect(res.status).toBe(404);
     expectApexClass(res);
   });
 
   it("nostr.json keeps its CORS + content type under the apex class", async () => {
     const res = await SELF.fetch(
-      "https://nostrbook.net/.well-known/nostr.json?name=alice",
+      "https://nbread.lol/.well-known/nostr.json?name=alice",
     );
     expect(res.status).toBe(200);
     expectApexClass(res);
@@ -116,24 +116,24 @@ describe("apex class", () => {
   });
 
   it("unknown host class (guard 404) gets the strict apex default", async () => {
-    const res = await SELF.fetch("https://nostrbook.net.evil.com/");
+    const res = await SELF.fetch("https://nbread.lol.evil.com/");
     expect(res.status).toBe(404);
     expectApexClass(res);
   });
 
   it("unclaimed subdomain (tenant 404) gets the strict apex default", async () => {
-    const res = await SELF.fetch("https://unknown.nostrbook.net/");
+    const res = await SELF.fetch("https://unknown.nbread.lol/");
     expect(res.status).toBe(404);
     expectApexClass(res);
   });
 
   it("/discover carries apex headers on miss AND on cache hit", async () => {
-    const miss = await SELF.fetch("https://nostrbook.net/discover");
+    const miss = await SELF.fetch("https://nbread.lol/discover");
     expect(miss.status).toBe(200);
     expect(miss.headers.get(CACHE_STATUS_HEADER)).toBe("miss");
     expectApexClass(miss);
 
-    const hit = await SELF.fetch("https://nostrbook.net/discover");
+    const hit = await SELF.fetch("https://nbread.lol/discover");
     expect(hit.status).toBe(200);
     expect(hit.headers.get(CACHE_STATUS_HEADER)).toBe("hit");
     expectApexClass(hit);
@@ -142,21 +142,21 @@ describe("apex class", () => {
 
 describe("blog class (tenant subdomains)", () => {
   it("blog home carries the exact blog CSP on miss AND on cache hit", async () => {
-    const miss = await SELF.fetch("https://alice.nostrbook.net/");
+    const miss = await SELF.fetch("https://alice.nbread.lol/");
     expect(miss.status).toBe(200);
     expect(miss.headers.get(CACHE_STATUS_HEADER)).toBe("miss");
     expectBlogClass(miss);
 
-    const hit = await SELF.fetch("https://alice.nostrbook.net/");
+    const hit = await SELF.fetch("https://alice.nbread.lol/");
     expect(hit.status).toBe(200);
     expect(hit.headers.get(CACHE_STATUS_HEADER)).toBe("hit");
     expectBlogClass(hit);
   });
 
   it("blog pages serve NO JavaScript (CSP forbids it; markup ships none)", async () => {
-    const home = await SELF.fetch("https://alice.nostrbook.net/");
+    const home = await SELF.fetch("https://alice.nbread.lol/");
     expect((await home.text()).toLowerCase()).not.toContain("<script");
-    const post = await SELF.fetch("https://alice.nostrbook.net/hello-world");
+    const post = await SELF.fetch("https://alice.nbread.lol/hello-world");
     expect(post.status).toBe(200);
     expectBlogClass(post);
     expect((await post.text()).toLowerCase()).not.toContain("<script");
@@ -166,7 +166,7 @@ describe("blog class (tenant subdomains)", () => {
   });
 
   it("RSS keeps its XML content type + blog-class headers", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/rss.xml");
+    const res = await SELF.fetch("https://alice.nbread.lol/rss.xml");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe(
       "application/rss+xml; charset=utf-8",
@@ -175,21 +175,21 @@ describe("blog class (tenant subdomains)", () => {
   });
 
   it("sitemap + robots keep their content types + headers", async () => {
-    const sitemap = await SELF.fetch("https://alice.nostrbook.net/sitemap.xml");
+    const sitemap = await SELF.fetch("https://alice.nbread.lol/sitemap.xml");
     expect(sitemap.status).toBe(200);
     expect(sitemap.headers.get("Content-Type")).toBe(
       "application/xml; charset=utf-8",
     );
     expectBlogClass(sitemap);
 
-    const robots = await SELF.fetch("https://alice.nostrbook.net/robots.txt");
+    const robots = await SELF.fetch("https://alice.nbread.lol/robots.txt");
     expect(robots.status).toBe(200);
     expect(robots.headers.get("Content-Type")).toContain("text/plain");
     expectBlogClass(robots);
   });
 
   it("blog 404s (unknown slug) carry blog-class headers", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/no-such-post");
+    const res = await SELF.fetch("https://alice.nbread.lol/no-such-post");
     expect(res.status).toBe(404);
     expectBlogClass(res);
   });
@@ -203,7 +203,7 @@ describe("blog class (tenant subdomains)", () => {
     // …and blog markup legitimately ships neither element, so the pins are
     // free: home + post pages contain no <form>/<base>.
     for (const path of ["/", "/hello-world"]) {
-      const res = await SELF.fetch(`https://alice.nostrbook.net${path}`);
+      const res = await SELF.fetch(`https://alice.nbread.lol${path}`);
       const html = (await res.text()).toLowerCase();
       expect(html).not.toContain("<form");
       expect(html).not.toContain("<base");
@@ -215,14 +215,14 @@ describe("blog class (apex /npub1… views)", () => {
   const bobNpub = npubEncode(BOB_PK);
 
   it("npub home renders with blog-class headers (no XFO)", async () => {
-    const res = await SELF.fetch(`https://nostrbook.net/${bobNpub}`);
+    const res = await SELF.fetch(`https://nbread.lol/${bobNpub}`);
     expect(res.status).toBe(200);
     expectBlogClass(res);
     expect((await res.text()).toLowerCase()).not.toContain("<script");
   });
 
   it("npub RSS keeps content type + blog-class headers", async () => {
-    const res = await SELF.fetch(`https://nostrbook.net/${bobNpub}/rss.xml`);
+    const res = await SELF.fetch(`https://nbread.lol/${bobNpub}/rss.xml`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe(
       "application/rss+xml; charset=utf-8",
@@ -232,7 +232,7 @@ describe("blog class (apex /npub1… views)", () => {
 
   it("shape-valid npub with a bad checksum 404s with blog-class headers", async () => {
     const zeds = "z".repeat(58);
-    const res = await SELF.fetch(`https://nostrbook.net/npub1${zeds}`);
+    const res = await SELF.fetch(`https://nbread.lol/npub1${zeds}`);
     expect(res.status).toBe(404);
     expectBlogClass(res);
   });

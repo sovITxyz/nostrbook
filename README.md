@@ -1,10 +1,10 @@
-# Nostrbook
+# nbread.lol
 
 Nostr-native blogging platform. Your posts are [NIP-23](https://github.com/nostr-protocol/nips/blob/master/23.md)
-`kind 30023` events signed by **your** key — Nostrbook mirrors them into a fast
-edge database and renders them beautifully at `you.nostrbook.net`.
+`kind 30023` events signed by **your** key — nbread.lol mirrors them into a fast
+edge database and renders them beautifully at `you.nbread.lol`.
 
-- **Own your words**: every post is a signed Nostr event; Nostrbook is just a
+- **Own your words**: every post is a signed Nostr event; nbread.lol is just a
   renderer. Take your key elsewhere any time and your blog comes with you.
 - **No accounts, no passwords**: log in with a NIP-07 browser extension.
 - **Fast + minimal**: one Cloudflare Worker, server-side rendering, no
@@ -37,5 +37,5 @@ Phase-by-phase build plan: see [docs/phases/](docs/phases/).
 
 Copyright (C) 2026 sovITxyz <git@sovit.xyz>
 
-[AGPL-3.0-only](LICENSE). If you run a modified Nostrbook as a service, you
+[AGPL-3.0-only](LICENSE). If you run a modified nbread.lol as a service, you
 must offer its source to your users.

@@ -5,19 +5,19 @@ import { SiteHeader, SiteFooter } from "./chrome";
 export function DocsPage() {
   return (
     <Layout
-      title="Docs — Nostrbook"
-      description="How Nostrbook works: NIP-07 sign-in, handles, the markdown editor, feeds, theme CSS, and relays."
+      title="Docs — nbread.lol"
+      description="How nbread.lol works: NIP-07 sign-in, handles, the markdown editor, feeds, theme CSS, and relays."
     >
       <SiteHeader current="docs" />
       <main class="info-page">
         <h1>Docs</h1>
         <p class="updated">Last updated: 2026-07-14</p>
 
-        <h2>What is Nostrbook</h2>
+        <h2>What is nbread.lol</h2>
         <p>
           Posts are NIP-23 long-form events (kind 30023) on public Nostr
-          relays. Nostrbook mirrors them into an edge database and renders
-          them at <code>handle.nostrbook.net</code>.
+          relays, which nbread.lol mirrors into an edge database and renders
+          at <code>handle.nbread.lol</code>.
         </p>
 
         <h2>Signing in</h2>
@@ -43,14 +43,14 @@ export function DocsPage() {
 
         <h2>Your blog</h2>
         <p>
-          Your blog lives at <code>handle.nostrbook.net</code>, with{" "}
+          Your blog lives at <code>handle.nbread.lol</code>, with{" "}
           <code>/rss.xml</code>, <code>/atom.xml</code>, and{" "}
           <code>/sitemap.xml</code>.
         </p>
 
         <h2>NIP-05</h2>
         <p>
-          You are <code>handle@nostrbook.net</code>.
+          You are <code>handle@nbread.lol</code>.
         </p>
 
         <h2>Markdown support</h2>
@@ -88,14 +88,14 @@ body { font-family: Georgia, serif; }
 
         <h2>Unclaimed blogs</h2>
         <p>
-          Any npub renders read-only at <code>nostrbook.net/npub1…</code>.
+          Any npub renders read-only at <code>nbread.lol/npub1…</code>.
         </p>
 
         <h2>Source & license</h2>
         <p>
           AGPL-3.0 —{" "}
-          <a href="https://github.com/sovITxyz/nostrbook">
-            github.com/sovITxyz/nostrbook
+          <a href="https://github.com/sovITxyz/nbread">
+            github.com/sovITxyz/nbread
           </a>
           . Run your own if you like.
         </p>

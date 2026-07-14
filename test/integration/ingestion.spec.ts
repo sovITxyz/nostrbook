@@ -25,7 +25,7 @@ describe("public blog from mirrored events (SELF.fetch, D1 provider)", () => {
   });
 
   it("lists mirrored posts on the blog home with the mirrored profile", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/");
+    const res = await SELF.fetch("https://alice.nbread.lol/");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Hello world");
@@ -38,7 +38,7 @@ describe("public blog from mirrored events (SELF.fetch, D1 provider)", () => {
 
   it("serves the post page from STORED html with zero renderPost calls", async () => {
     const before = getRenderPostCallCount();
-    const res = await SELF.fetch("https://alice.nostrbook.net/hello-world");
+    const res = await SELF.fetch("https://alice.nbread.lol/hello-world");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("<strong>alice</strong>");
@@ -48,7 +48,7 @@ describe("public blog from mirrored events (SELF.fetch, D1 provider)", () => {
   });
 
   it("neutralizes the XSS post end-to-end through D1", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/xss-test");
+    const res = await SELF.fetch("https://alice.nbread.lol/xss-test");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(findXssVectors(html, "page")).toEqual([]);
@@ -56,18 +56,18 @@ describe("public blog from mirrored events (SELF.fetch, D1 provider)", () => {
   });
 
   it("serves valid RSS built from mirrored events", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/rss.xml");
+    const res = await SELF.fetch("https://alice.nbread.lol/rss.xml");
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(XMLValidator.validate(xml)).toBe(true);
     expect(xml).toContain("<title>alice-test</title>");
     expect(xml).toContain(
-      "<link>https://alice.nostrbook.net/hello-world</link>",
+      "<link>https://alice.nbread.lol/hello-world</link>",
     );
   });
 
   it("404s a slug that is not mirrored", async () => {
-    const res = await SELF.fetch("https://alice.nostrbook.net/no-such-post");
+    const res = await SELF.fetch("https://alice.nbread.lol/no-such-post");
     expect(res.status).toBe(404);
   });
 
@@ -75,16 +75,16 @@ describe("public blog from mirrored events (SELF.fetch, D1 provider)", () => {
     expect(await mirrorEvent(env, deleteByAlice)).toBe("stored");
 
     const home = await (
-      await SELF.fetch("https://alice.nostrbook.net/")
+      await SELF.fetch("https://alice.nbread.lol/")
     ).text();
     expect(home).not.toContain("Hello world");
     expect(home).toContain("Markdown torture test"); // others still listed
 
-    const post = await SELF.fetch("https://alice.nostrbook.net/hello-world");
+    const post = await SELF.fetch("https://alice.nbread.lol/hello-world");
     expect(post.status).toBe(404);
 
     const rss = await (
-      await SELF.fetch("https://alice.nostrbook.net/rss.xml")
+      await SELF.fetch("https://alice.nbread.lol/rss.xml")
     ).text();
     expect(rss).not.toContain("hello-world");
   });

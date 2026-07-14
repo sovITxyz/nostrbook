@@ -76,7 +76,7 @@ beforeEach(async () => {
 
 describe("GET /login", () => {
   it("serves the login page with the NIP-07 glue", async () => {
-    const res = await SELF.fetch("https://nostrbook.net/login");
+    const res = await SELF.fetch("https://nbread.lol/login");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("login-button");
@@ -87,7 +87,7 @@ describe("GET /login", () => {
     const challenge = await getChallenge();
     const login = await postLogin(signLoginEvent(challenge));
     expect(login.status).toBe(200);
-    const res = await SELF.fetch("https://nostrbook.net/login", {
+    const res = await SELF.fetch("https://nbread.lol/login", {
       headers: { Cookie: `sid=${sidFrom(login)}` },
       redirect: "manual",
     });
@@ -99,7 +99,7 @@ describe("GET /login", () => {
 describe("GET /login/challenge", () => {
   it("issues a 64-hex nonce stored in D1 with a 5min expiry", async () => {
     const before = now();
-    const res = await SELF.fetch("https://nostrbook.net/login/challenge");
+    const res = await SELF.fetch("https://nbread.lol/login/challenge");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { challenge: string; ttl: number };
     expect(body.challenge).toMatch(/^[0-9a-f]{64}$/);
@@ -215,8 +215,8 @@ describe("POST /login", () => {
   it("rejects an event bound to another service (challenge-proxy phishing)", async () => {
     for (const relay of [
       "wss://evil.example",
-      "wss://nostrbook.net.evil.example",
-      "https://evil.example/nostrbook.net",
+      "wss://nbread.lol.evil.example",
+      "https://evil.example/nbread.lol",
       "not a url at all",
     ]) {
       const challenge = await getChallenge();
@@ -228,7 +228,7 @@ describe("POST /login", () => {
   it("accepts an https:// relay binding for MAIN_HOST too", async () => {
     const challenge = await getChallenge();
     const res = await postLogin(
-      signLoginEvent(challenge, { relay: "https://nostrbook.net" }),
+      signLoginEvent(challenge, { relay: "https://nbread.lol" }),
     );
     expect(res.status).toBe(200);
   });
@@ -308,7 +308,7 @@ describe("sessions across requests + logout", () => {
   it("the session cookie works across multiple requests", async () => {
     const sid = await login();
     for (let i = 0; i < 2; i++) {
-      const res = await SELF.fetch("https://nostrbook.net/dashboard", {
+      const res = await SELF.fetch("https://nbread.lol/dashboard", {
         headers: { Cookie: `sid=${sid}` },
       });
       expect(res.status).toBe(200);
@@ -317,12 +317,12 @@ describe("sessions across requests + logout", () => {
   });
 
   it("anonymous / garbage cookies get redirected to /login", async () => {
-    const anon = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const anon = await SELF.fetch("https://nbread.lol/dashboard", {
       redirect: "manual",
     });
     expect(anon.status).toBe(302);
     expect(anon.headers.get("location")).toBe("/login");
-    const garbage = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const garbage = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: "sid=definitely-not-a-token" },
       redirect: "manual",
     });
@@ -331,7 +331,7 @@ describe("sessions across requests + logout", () => {
 
   it("logout deletes the KV session and clears the cookie", async () => {
     const sid = await login();
-    const res = await SELF.fetch("https://nostrbook.net/logout", {
+    const res = await SELF.fetch("https://nbread.lol/logout", {
       method: "POST",
       headers: { Cookie: `sid=${sid}` },
     });
@@ -341,7 +341,7 @@ describe("sessions across requests + logout", () => {
     expect(cleared).toContain("Max-Age=0");
     expect(await env.KV.get(sessionKey(sid))).toBeNull();
     // The invalidated token no longer authenticates.
-    const after = await SELF.fetch("https://nostrbook.net/dashboard", {
+    const after = await SELF.fetch("https://nbread.lol/dashboard", {
       headers: { Cookie: `sid=${sid}` },
       redirect: "manual",
     });
@@ -363,12 +363,12 @@ describe("auth rate limits (D1 rate_limits)", () => {
   it("challenge: 10 per 15min per IP, 11th is 429", async () => {
     const ip = "192.0.2.12";
     for (let i = 0; i < 10; i++) {
-      const res = await SELF.fetch("https://nostrbook.net/login/challenge", {
+      const res = await SELF.fetch("https://nbread.lol/login/challenge", {
         headers: { "CF-Connecting-IP": ip },
       });
       expect(res.status).toBe(200);
     }
-    const res = await SELF.fetch("https://nostrbook.net/login/challenge", {
+    const res = await SELF.fetch("https://nbread.lol/login/challenge", {
       headers: { "CF-Connecting-IP": ip },
     });
     expect(res.status).toBe(429);
@@ -386,7 +386,7 @@ describe("auth rate limits (D1 rate_limits)", () => {
     )
       .bind(CHALLENGE_GLOBAL_KEY, CHALLENGE_GLOBAL_DAILY_CAP, windowStart)
       .run();
-    const res = await SELF.fetch("https://nostrbook.net/login/challenge", {
+    const res = await SELF.fetch("https://nbread.lol/login/challenge", {
       headers: { "CF-Connecting-IP": "192.0.2.99" },
     });
     expect(res.status).toBe(429);

@@ -1,4 +1,4 @@
-// P6 search (nostrbook.net/search + services/search) end-to-end via
+// P6 search (nbread.lol/search + services/search) end-to-end via
 // SELF.fetch and direct service calls: canned queries over fixtures, the
 // MATCH injection corpus (never a 5xx), strict echo escaping, discover-equal
 // scoping, and the per-IP rate limit.
@@ -38,7 +38,7 @@ let ipSeq = 0;
 /** GET /search with a fresh client IP so tests never trip each other's window. */
 async function getSearch(q?: string, ip?: string): Promise<Response> {
   const query = q === undefined ? "" : `?q=${encodeURIComponent(q)}`;
-  return SELF.fetch(`https://nostrbook.net/search${query}`, {
+  return SELF.fetch(`https://nbread.lol/search${query}`, {
     headers: { "CF-Connecting-IP": ip ?? `10.6.0.${++ipSeq % 250}` },
   });
 }
@@ -138,7 +138,7 @@ describe("search (P6)", () => {
       const res = await getSearch("hello");
       expect(res.status).toBe(200);
       const html = await res.text();
-      expect(html).toContain('href="https://alice.nostrbook.net/hello-world"');
+      expect(html).toContain('href="https://alice.nbread.lol/hello-world"');
       expect(html).toContain("Hello world");
       expect(html).not.toContain("bob-first");
       expect(html).toMatchSnapshot();

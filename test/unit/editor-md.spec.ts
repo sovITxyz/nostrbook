@@ -1,6 +1,6 @@
 // Redesign: the DOM-free markdown text-manipulation core behind the editor
 // toolbar (public/js/editor-md.js). The IIFE is imported for its side effect
-// (it assigns globalThis.NostrbookEditorMd) and exercised directly — every
+// (it assigns globalThis.NbreadEditorMd) and exercised directly — every
 // returned instruction also goes through apply(), which asserts the
 // byte-identity property: splicing `text` over [start, end) must leave every
 // byte outside that range untouched.
@@ -18,7 +18,7 @@ type Instr = {
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const md = (globalThis as any).NostrbookEditorMd as {
+const md = (globalThis as any).NbreadEditorMd as {
   wrapInline: (v: string, s: number, e: number, marker: string) => Instr | null;
   toggleLinePrefix: (v: string, s: number, e: number, prefix: string) => Instr;
   cycleHeading: (v: string, s: number, e: number) => Instr;

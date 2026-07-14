@@ -4,7 +4,7 @@ import { SiteHeader, SiteFooter } from "./chrome";
 /** Apex 404 page (mainApp.notFound). Static JSX — safe on any unknown path. */
 export function MainNotFound() {
   return (
-    <Layout title="404 — Nostrbook">
+    <Layout title="404 — nbread.lol">
       <SiteHeader />
       <main class="info-page">
         <h1>404</h1>

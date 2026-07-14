@@ -17,7 +17,7 @@ export function DiscoverPage(props: {
   error?: string | null;
 }) {
   return (
-    <Layout title="Discover — Nostrbook">
+    <Layout title="Discover — nbread.lol">
       <SiteHeader current="discover" />
       <main class="discover">
         <h1>Discover</h1>
