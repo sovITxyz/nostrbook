@@ -75,44 +75,54 @@ wrangler secret put ADMIN_PUBKEY      # OPTIONAL: hex/npub admin identity for /a
   (`docs/ops.md` §3) and set `ADMIN_PUBKEY` if the blocklist admin is wanted
   (`docs/ops.md` §5).
 
-## 6. Deployment record
+## 6. Deployment record & nbread.lol provisioning — PENDING
 
-Account **Sovereign IT** (`2d2cca1238913def0ad9cc1f598a8e0b`).
+The project moved from `nostrbook.net` to **`nbread.lol`**. Provisioning is **not
+done yet**; the committed `wrangler.jsonc` points at the target state below.
 
-### Reused resources — carry over from the original launch (LIVE)
+### Chosen strategy: fresh resources on the account that owns nbread.lol
 
-These bind by id and hold the existing data; the `nostrbook → nbread` rename
-reuses them unchanged (the wrangler `database_name` label is cosmetic — D1 binds
-by `database_id`):
+`nbread.lol` is an **active zone on a different Cloudflare account** than the old
+launch:
 
-- **D1** `e9163b12-3cde-4b82-961b-b825c85321e3` (region ENAM); all migrations
-  applied `--remote`; reserved handles seeded. Labelled `nbread` in
-  `wrangler.jsonc`.
-- **KV** `75a4c5d58e1f449080bf8be64a995a5a` (binding `KV`).
+- **`nbread.lol`** → account `830ade508fd3f90a2a591477cdbd399c` (login
+  `cameron@sovit.xyz` has access). **Target account for the deploy.**
+- Old `nostrbook.net` + its D1 `e9163b12-3cde-4b82-961b-b825c85321e3` and KV
+  `75a4c5d58e1f449080bf8be64a995a5a` live on **Sovereign IT**
+  (`2d2cca1238913def0ad9cc1f598a8e0b`). Worker routes must bind a zone on the
+  **same** account, so those old resources are **not reused**.
 
-### nbread.lol migration — PENDING (target state after the domain migration)
+Decision (2026-07-14): **deploy on account `830ade…` with fresh D1 + KV.** The
+~1-day-old nostrbook.net data does not carry over — reserved handles are re-seeded
+and posts re-mirror from relays via cron.
 
-The project moved from `nostrbook.net` to **`nbread.lol`**. The following are the
-target state and are **not yet provisioned** — the committed `wrangler.jsonc`
-points at them, but they must be created before `wrangler deploy` serves traffic:
+### Next-session checklist (needs a scoped Cloudflare API token for `830ade…`)
 
-- **Zone** `nbread.lol` on the Sovereign IT account: NS active, SSL **Full
-  (strict)**, Universal SSL covering `nbread.lol` + `*.nbread.lol`, Always Use
-  HTTPS + HSTS.
-- **DNS** (proxied): apex `A @ 192.0.2.1`, apex `AAAA @ 100::`, wildcard
-  `CNAME * → nbread.lol`.
-- **Turnstile**: the site key currently in `wrangler.jsonc`
-  (`0x4AAAAAAD1JzzXDBykpiavq`) is the **old nostrbook.net widget** and will fail
-  the hostname check on `nbread.lol`. Create/point a widget at `nbread.lol` +
-  `nbread.cameron-2d2.workers.dev`, then update `TURNSTILE_SITE_KEY` and
-  `wrangler secret put TURNSTILE_SECRET_KEY`.
-- **Worker `nbread`**: renaming the worker creates a NEW worker on deploy — routes
-  `nbread.lol/*` + `*.nbread.lol/*`, cron `*/15`, and secrets
-  (`TURNSTILE_SECRET_KEY`, `ADMIN_PUBKEY`) do not carry over from the old
-  `nostrbook` worker and must be (re-)attached.
-- **WAF**: recreate `global-per-ip-throttle` (60 req/10s per IP, block 10s) +
-  `scanner-paths-block` (`.php`, `/wp-`, `/.env`, `.git/` → block) with host
-  `nbread.lol`.
+Token scopes required: Workers Scripts:Edit, Workers Routes:Edit, D1:Edit,
+Workers KV Storage:Edit, DNS:Edit, Zone Settings:Edit, SSL and Certificates:Edit,
+Turnstile:Edit. Then:
+
+1. `export CLOUDFLARE_ACCOUNT_ID=830ade508fd3f90a2a591477cdbd399c` (+ the token).
+2. `wrangler d1 create nbread` → paste `database_id` into `wrangler.jsonc`.
+3. `wrangler kv namespace create KV` → paste `id` into `wrangler.jsonc`.
+4. `wrangler d1 migrations apply nbread --remote`; seed reserved handles.
+5. **DNS** on `nbread.lol` (proxied): apex `A @ 192.0.2.1`, apex `AAAA @ 100::`,
+   wildcard `CNAME * → nbread.lol`. SSL **Full (strict)**, Universal SSL covers
+   `nbread.lol` + `*.nbread.lol`, Always Use HTTPS + HSTS.
+6. **Turnstile**: new widget for `nbread.lol` + the `nbread.<account>.workers.dev`
+   preview host → update `TURNSTILE_SITE_KEY` in `wrangler.jsonc`;
+   `wrangler secret put TURNSTILE_SECRET_KEY`. (The committed key
+   `0x4AAAAAAD1JzzXDBykpiavq` is the old nostrbook.net widget and will fail the
+   nbread.lol hostname check.)
+7. `wrangler secret put ADMIN_PUBKEY` (optional; unset ⇒ /admin 404s).
+8. `wrangler deploy` → registers routes `nbread.lol/*` + `*.nbread.lol/*`,
+   cron `*/15`.
+9. **WAF**: `global-per-ip-throttle` (60 req/10s per IP, block 10s) +
+   `scanner-paths-block` (`.php`, `/wp-`, `/.env`, `.git/` → block), host
+   `nbread.lol`.
+10. Verify: `bash scripts/smoke.sh https://nbread.lol` green; a claimed
+    `handle.nbread.lol` renders; `/.well-known/nostr.json` returns
+    `handle@nbread.lol`; cron observed in `wrangler tail`.
 
 The old `nostrbook` worker / `nostrbook.net` zone keep serving until explicitly
 retired — decommission is a separate step.
