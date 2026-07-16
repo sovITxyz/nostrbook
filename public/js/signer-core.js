@@ -13,7 +13,6 @@
   "use strict";
 
   var HEX_64 = /^[0-9a-f]{64}$/;
-  var HEX_128 = /^[0-9a-f]{128}$/;
 
   var INTENT_TYPES = { get_public_key: true, sign_event: true };
   var PENDING_KINDS = { login: true, publish: true, delete: true };
@@ -98,17 +97,16 @@
   // priority order. "event" is what our own callbackUrl suffix names.
   var CALLBACK_PARAMS = ["event", "sig", "signature", "result", "pubkey", "npub"];
 
-  function looksLikePubkey(value) {
-    return HEX_64.test(value.toLowerCase()) || /^npub1[02-9ac-hj-np-z]{58}$/i.test(value);
-  }
-
   /**
    * Parse the query string Amber redirected back with. Returns
    * { kind: "sign" | "pubkey" | null, value: string | null } — `value` is the
    * raw appended payload (128-hex sig, or npub/hex pubkey); the caller
-   * reassembles the signed event. Tolerant of both our marked form
-   * ("?nip55=sign&event=<sig>") and generic-param variants, since Amber
-   * versions differ in what they append.
+   * reassembles the signed event. A URL counts as a NIP-55 callback ONLY when
+   * it carries our explicit "nip55" marker (signer.js always bakes it into
+   * the callbackUrl it hands Amber) — bare ?pubkey=/?sig=/… params on an
+   * innocent link must never trigger the resume path. Once the marker is
+   * present, the result value is still extracted tolerantly across the param
+   * names different Amber versions append.
    */
   function parseNip55Callback(search) {
     if (typeof search !== "string" || search === "" || search === "?") {
@@ -117,10 +115,12 @@
     var params = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
 
     // Our own marker (baked into callbackUrl) names the flow explicitly.
+    // No marker => not a NIP-55 callback, regardless of other params.
     var marker = params.get("nip55");
     var kind = null;
     if (marker === "sign" || marker === "sign_event") kind = "sign";
     else if (marker === "pubkey" || marker === "get_public_key") kind = "pubkey";
+    if (kind === null) return { kind: null, value: null };
 
     var value = null;
     for (var i = 0; i < CALLBACK_PARAMS.length; i++) {
@@ -130,14 +130,6 @@
         break;
       }
     }
-
-    if (kind === null && value !== null) {
-      // No marker — infer from the payload shape: a BIP-340 signature is
-      // 128 hex chars; a pubkey is 64 hex or an npub.
-      if (HEX_128.test(value.toLowerCase())) kind = "sign";
-      else if (looksLikePubkey(value)) kind = "pubkey";
-    }
-    if (kind === null) return { kind: null, value: null };
     return { kind: kind, value: value };
   }
 

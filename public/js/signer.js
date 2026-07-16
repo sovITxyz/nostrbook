@@ -150,7 +150,8 @@
    * and return { kind, unsigned, signed?, pubkey?, error? } — `signed` for a
    * completed sign_event (schnorr-verified against the precomputed id +
    * pubkey), `pubkey` for a completed get_public_key (also persisted via
-   * configureNip55), `error` on cancel/expiry/verification failure.
+   * configureNip55), `error` on cancel/expiry/verification failure or when
+   * the callback type does not match the pending flow.
    * Returns null when the URL has no callback.
    */
   function resumePending() {
@@ -168,6 +169,21 @@
         error: "This signing request expired — please try again.",
       };
     }
+
+    // Bind the callback type to the pending flow: a "pubkey" callback may
+    // only complete a get_public_key round-trip (record with unsigned ===
+    // null), and a "sign" callback only a record that stashed an unsigned
+    // event. A mismatch means the callback was injected or crossed flows —
+    // the record was already consumed above; never persist a pubkey from it.
+    var wantsPubkey = record.unsigned === null || record.unsigned === undefined;
+    if ((parsed.kind === "pubkey") !== wantsPubkey) {
+      return {
+        kind: record.kind,
+        unsigned: record.unsigned,
+        error: "unexpected signer callback",
+      };
+    }
+
     if (!parsed.value) {
       return { kind: record.kind, unsigned: record.unsigned, error: "Signing was cancelled." };
     }
@@ -225,10 +241,14 @@
   var backends = {
     nip07: {
       ready: function () {
+        // Require BOTH methods (a partial/broken shim exposing only one
+        // would otherwise pass ready() and then throw a raw TypeError from
+        // the unconditional getPublicKey() call in the login flow).
         var ok =
           typeof window !== "undefined" &&
           window.nostr &&
-          typeof window.nostr.signEvent === "function";
+          typeof window.nostr.signEvent === "function" &&
+          typeof window.nostr.getPublicKey === "function";
         return Promise.resolve(
           ok
             ? { ok: true }

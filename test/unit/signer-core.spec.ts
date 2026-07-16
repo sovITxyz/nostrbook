@@ -4,7 +4,7 @@
 // committed crypto vendor bundle. signer.js itself is deliberately NOT
 // imported here — it touches window/localStorage/location and cannot load in
 // workerd.
-import { describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // @ts-ignore — plain browser IIFE, intentionally shipped without types
 import "../../public/js/vendor/nostr-crypto.js";
 // @ts-ignore — plain browser IIFE, intentionally shipped without types
@@ -34,6 +34,10 @@ const C = (globalThis as any).NbreadCrypto as {
   nsecEncode: (skHex: string) => string;
   eventId: (unsigned: Unsigned) => string;
   getPublicKeyHex: (skBytes: Uint8Array) => string;
+  finalizeEvent: (
+    unsigned: Partial<Unsigned>,
+    skBytes: Uint8Array,
+  ) => Unsigned & { id: string; sig: string };
 };
 
 const Core = (globalThis as any).NbreadSignerCore as {
@@ -195,30 +199,48 @@ describe("NbreadSignerCore.parseNip55Callback", () => {
     });
   });
 
-  it("tolerates generic-param variants across Amber versions", () => {
-    // Signature under alternate names, no nip55 marker: inferred from shape.
-    expect(Core.parseNip55Callback(`?sig=${SIG_128}`)).toEqual({
+  it("tolerates alternate result params across Amber versions once marked", () => {
+    // With the nip55 marker present, the value is extracted from whichever
+    // param this Amber version appended.
+    expect(Core.parseNip55Callback(`?nip55=sign&sig=${SIG_128}`)).toEqual({
       kind: "sign",
       value: SIG_128,
     });
-    expect(Core.parseNip55Callback(`?signature=${SIG_128}`)).toEqual({
+    expect(Core.parseNip55Callback(`?nip55=sign&signature=${SIG_128}`)).toEqual({
       kind: "sign",
       value: SIG_128,
     });
-    expect(Core.parseNip55Callback(`?event=${SIG_128}`)).toEqual({
-      kind: "sign",
-      value: SIG_128,
-    });
-    // Pubkey under alternate names.
-    expect(Core.parseNip55Callback(`?result=${keys.bob.pk}`)).toEqual({
+    expect(Core.parseNip55Callback(`?nip55=pubkey&result=${keys.bob.pk}`)).toEqual({
       kind: "pubkey",
       value: keys.bob.pk,
     });
     const npub = C.npubEncode(keys.bob.pk);
-    expect(Core.parseNip55Callback(`?pubkey=${npub}`)).toEqual({
+    expect(Core.parseNip55Callback(`?nip55=pubkey&pubkey=${npub}`)).toEqual({
       kind: "pubkey",
       value: npub,
     });
+    // Long-form marker values still name the flow.
+    expect(Core.parseNip55Callback(`?nip55=sign_event&event=${SIG_128}`)).toEqual({
+      kind: "sign",
+      value: SIG_128,
+    });
+    expect(
+      Core.parseNip55Callback(`?nip55=get_public_key&event=${keys.bob.pk}`),
+    ).toEqual({ kind: "pubkey", value: keys.bob.pk });
+  });
+
+  it("ignores marker-less URLs even when they carry result-shaped params", () => {
+    // Regression: an innocent link with ?pubkey=/?sig=/… must NOT be treated
+    // as a NIP-55 callback (it would consume/strip signer state).
+    const none = { kind: null, value: null };
+    expect(Core.parseNip55Callback(`?sig=${SIG_128}`)).toEqual(none);
+    expect(Core.parseNip55Callback(`?signature=${SIG_128}`)).toEqual(none);
+    expect(Core.parseNip55Callback(`?event=${SIG_128}`)).toEqual(none);
+    expect(Core.parseNip55Callback(`?result=${keys.bob.pk}`)).toEqual(none);
+    expect(Core.parseNip55Callback(`?pubkey=${keys.bob.pk}`)).toEqual(none);
+    expect(Core.parseNip55Callback(`?npub=${C.npubEncode(keys.bob.pk)}`)).toEqual(none);
+    // Unknown marker values do not count either.
+    expect(Core.parseNip55Callback(`?nip55=wat&event=${SIG_128}`)).toEqual(none);
   });
 
   it("keeps the marker's kind even when a value is missing (cancel case)", () => {
@@ -377,5 +399,136 @@ describe("NbreadSignerCore.completeUnsigned", () => {
     expect(() =>
       Core.completeUnsigned({ kind: 1.5, content: "x" }, keys.alice.pk, NOW),
     ).toThrow();
+  });
+});
+
+// --- NbreadSigner.resumePending: callback-type <-> pending-record binding ----
+//
+// signer.js touches window/localStorage/location, so (like signer-nip46.spec)
+// it is imported dynamically in beforeAll after minimal shims are installed —
+// static imports hoist above module-body statements. `history` stays
+// undefined; stripCallbackParams swallows that (cosmetic only).
+describe("NbreadSigner.resumePending (NIP-55 callback binding)", () => {
+  const KEY_PENDING = "nbread:nip55:pending";
+  const KEY_NIP55 = "nbread:signer:nip55";
+  const KEY_METHOD = "nbread:signer:method";
+
+  const store = new Map<string, string>();
+  const loc = {
+    href: "https://nbread.lol/login",
+    origin: "https://nbread.lol",
+    pathname: "/login",
+    search: "",
+  };
+
+  type ResumeResult = {
+    kind: string | null;
+    unsigned: unknown;
+    signed?: Record<string, unknown>;
+    pubkey?: string;
+    error?: string;
+  } | null;
+
+  let Signer: { resumePending: () => ResumeResult };
+
+  beforeAll(async () => {
+    (globalThis as any).localStorage = {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => void store.set(k, String(v)),
+      removeItem: (k: string) => void store.delete(k),
+    };
+    (globalThis as any).location = loc;
+    // @ts-ignore — plain browser IIFE, intentionally shipped without types
+    await import("../../public/js/signer.js");
+    Signer = (globalThis as any).NbreadSigner;
+  });
+
+  beforeEach(() => {
+    store.clear();
+    setSearch("");
+  });
+
+  function nowSec() {
+    return Math.floor(Date.now() / 1000);
+  }
+  function stash(record: unknown) {
+    store.set(KEY_PENDING, JSON.stringify(record));
+  }
+  function setSearch(search: string) {
+    loc.search = search;
+    loc.href = "https://nbread.lol/login" + search;
+  }
+  function signFlowUnsigned() {
+    const unsigned: Unsigned = {
+      pubkey: keys.alice.pk,
+      created_at: 1_700_000_000,
+      kind: 1,
+      tags: [],
+      content: "hi",
+    };
+    return { ...unsigned, id: C.eventId(unsigned) };
+  }
+
+  it("returns null and leaves all state alone on a marker-less URL", () => {
+    stash({ kind: "login", unsigned: null, returnTo: "/login", ts: nowSec() });
+    setSearch(`?pubkey=${keys.alice.pk}`);
+    expect(Signer.resumePending()).toBeNull();
+    expect(store.has(KEY_PENDING)).toBe(true); // NOT consumed
+    expect(store.has(KEY_NIP55)).toBe(false);
+    expect(store.has(KEY_METHOD)).toBe(false);
+  });
+
+  it("completes a legitimate get_public_key round-trip and persists the pubkey", () => {
+    stash({ kind: "login", unsigned: null, returnTo: "/login", ts: nowSec() });
+    setSearch(`?nip55=pubkey&event=${keys.alice.pk}`);
+    const res = Signer.resumePending();
+    expect(res).toEqual({ kind: "login", unsigned: null, pubkey: keys.alice.pk });
+    expect(store.has(KEY_PENDING)).toBe(false); // one shot
+    expect(JSON.parse(store.get(KEY_NIP55)!)).toEqual({ pkHex: keys.alice.pk });
+    expect(store.get(KEY_METHOD)).toBe("nip55");
+  });
+
+  it("completes a legitimate sign_event round-trip (contract shape unchanged)", () => {
+    const full = signFlowUnsigned();
+    // finalizeEvent rederives pubkey/id from the same fields, so its sig is
+    // exactly what Amber would append for this stashed unsigned event.
+    const signed = C.finalizeEvent(full, C.hexToBytes(keys.alice.sk));
+    stash({ kind: "publish", unsigned: full, returnTo: "/write", ts: nowSec() });
+    setSearch(`?nip55=sign&event=${signed.sig}`);
+    const res = Signer.resumePending();
+    expect(res?.error).toBeUndefined();
+    expect(res?.kind).toBe("publish");
+    expect(res?.signed).toEqual({ ...full, sig: signed.sig });
+  });
+
+  it("rejects a sign callback against a pubkey-flow pending record and consumes it", () => {
+    stash({ kind: "login", unsigned: null, returnTo: "/login", ts: nowSec() });
+    setSearch(`?nip55=sign&event=${SIG_128}`);
+    const res = Signer.resumePending();
+    expect(res?.error).toBe("unexpected signer callback");
+    expect(res?.signed).toBeUndefined();
+    expect(res?.pubkey).toBeUndefined();
+    expect(store.has(KEY_PENDING)).toBe(false); // consumed even on rejection
+    expect(store.has(KEY_NIP55)).toBe(false);
+    expect(store.has(KEY_METHOD)).toBe(false);
+  });
+
+  it("rejects a pubkey callback against a sign-flow pending record — nothing persisted", () => {
+    stash({ kind: "publish", unsigned: signFlowUnsigned(), returnTo: "/write", ts: nowSec() });
+    setSearch(`?nip55=pubkey&event=${keys.mallory.pk}`);
+    const res = Signer.resumePending();
+    expect(res?.error).toBe("unexpected signer callback");
+    expect(res?.pubkey).toBeUndefined();
+    expect(store.has(KEY_PENDING)).toBe(false);
+    expect(store.has(KEY_NIP55)).toBe(false); // attacker pubkey never stored
+    expect(store.has(KEY_METHOD)).toBe(false);
+  });
+
+  it("never persists a pubkey when no pending record exists at all", () => {
+    setSearch(`?nip55=pubkey&event=${keys.mallory.pk}`);
+    const res = Signer.resumePending();
+    expect(res?.error).toMatch(/expired/);
+    expect(store.has(KEY_NIP55)).toBe(false);
+    expect(store.has(KEY_METHOD)).toBe(false);
   });
 });

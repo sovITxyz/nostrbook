@@ -4,11 +4,13 @@ import { SiteHeader, SiteFooter } from "./chrome";
 
 /**
  * Editor page (new post / edit existing). All signing happens client-side in
- * public/js/editor.js via the user's NIP-07 extension; this page only ships
- * the form plus a JSON config blob the scripts read. The markdown toolbar,
- * Write/Preview tabs, counter, and draft autosave are wired by
- * public/js/editor-toolbar.js on top of the DOM-free text core in
- * public/js/editor-md.js — script order at the bottom matters.
+ * public/js/editor.js through the NbreadSigner abstraction (NIP-07 extension,
+ * NIP-46 remote bunker, NIP-55/Amber redirect, or a stored local key); this
+ * page only ships the form plus a JSON config blob the scripts read. The
+ * markdown toolbar, Write/Preview tabs, counter, and draft autosave are wired
+ * by public/js/editor-toolbar.js on top of the DOM-free text core in
+ * public/js/editor-md.js — script order at the bottom matters (signer stack
+ * first, then the editor scripts).
  *
  * XSS notes: every field value renders through hono/jsx auto-escaping (post
  * titles/summaries/content are relay-sourced and hostile by assumption). The
@@ -267,6 +269,10 @@ export function EditorPage(props: {
           id="editor-config"
           dangerouslySetInnerHTML={{ __html: configJson }}
         ></script>
+        <script src="/js/vendor/nostr-crypto.js"></script>
+        <script src="/js/signer-core.js"></script>
+        <script src="/js/signer.js"></script>
+        <script src="/js/signer-nip46.js"></script>
         <script src="/js/editor-md.js"></script>
         <script src="/js/editor-toolbar.js"></script>
         <script src="/js/editor.js"></script>

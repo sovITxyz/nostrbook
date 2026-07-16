@@ -532,3 +532,41 @@ body.editor-wide {
   border-left: 3px solid var(--border);
   color: var(--muted);
 }
+
+/* --- Login: signer method picker + panels ---------------------------------
+   The picker is a vertical stack of method buttons; each panel is a small
+   form block. The .danger paragraph follows the existing danger color
+   convention (see .editor-meta.danger above). */
+
+.signer-picker button {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0.5rem 0;
+  text-align: left;
+}
+
+.signer-panel {
+  margin: 1rem 0;
+}
+
+.signer-panel input[type="text"],
+.signer-panel input[type="password"] {
+  max-width: 28rem;
+}
+
+.signer-npub {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.signer-panel p.danger {
+  color: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  .signer-panel p.danger {
+    color: #ef5350;
+  }
+}
