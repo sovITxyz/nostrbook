@@ -30,8 +30,11 @@ export function PrivacyPage() {
 
         <h2>Sessions</h2>
         <p>
-          Signing in with your NIP-07 extension sets one first-party cookie,
-          valid for up to 90 days, that maps to your public key. Nothing else.
+          Signing in with your Nostr key sets one first-party cookie, valid
+          for up to 90 days, that maps to your public key. Nothing else. Your
+          signer settings — and, if you choose the pasted-key option, your
+          secret key — are stored in your browser's localStorage and never
+          sent to the server.
         </p>
 
         <h2>Operational data</h2>

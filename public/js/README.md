@@ -1,13 +1,28 @@
 # public/js
 
-Client-side NIP-07 glue plus the hand-rolled editor (no build step at serve
+Client-side signer glue plus the hand-rolled editor (no build step at serve
 time, no runtime dependencies — every file is a plain IIFE served as-is):
 
+- `signer-core.js` — DOM-free pure helpers (`globalThis.NbreadSignerCore`):
+  nsec decoding, pubkey normalization, the NIP-55 (Amber) intent URL
+  builder + callback parser, and the pending-record make/validate pair the
+  redirect flow persists across page unloads. Unit-tested directly.
+- `signer.js` — the dispatcher (`globalThis.NbreadSigner`): one signing
+  seam (`ready`/`getPublicKey`/`signEvent`) over four backends — NIP-07
+  extension, pasted local key (signs in-page, key never leaves the browser),
+  NIP-55 Amber redirects (incl. `resumePending()` after the callback), and
+  a `register()`ed NIP-46 backend. Owns the `nbread:signer:*` localStorage
+  keys and `forget()`.
+- `signer-nip46.js` — NIP-46 remote-signer client
+  (`globalThis.NbreadNip46`): bunker:// / nostrconnect:// pairing, the
+  NIP-44 (with legacy NIP-04 fallback) request envelope, auth_url
+  surfacing, and schnorr verification of every returned event; registers
+  itself as the dispatcher's "nip46" backend on load.
 - `login.js` (P4) — fetches a one-time challenge, signs the kind 22242 auth
-  event via `window.nostr`, POSTs it to `/login`. Keys never leave the
-  extension.
-- `editor.js` (P5) — builds kind 30023 / kind 5 events, signs via the
-  extension, broadcasts to relays, POSTs to `/api/mirror`. Also owns the
+  event via `NbreadSigner`, POSTs it to `/login`. Also owns the login-page
+  method picker and per-method panels.
+- `editor.js` (P5) — builds kind 30023 / kind 5 events, signs via
+  `NbreadSigner`, broadcasts to relays, POSTs to `/api/mirror`. Also owns the
   server-rendered preview fetch: it listens for the
   `nbread:preview-requested` event (dispatched by the Preview tab),
   caches the last previewed value, and calls
@@ -24,8 +39,10 @@ time, no runtime dependencies — every file is a plain IIFE served as-is):
   draft autosave (`window.NbreadDraft`). All textarea mutations go
   through one `execCommand("insertText")` seam so native undo survives.
 
-Load order on the editor page matters: `editor-md.js` →
-`editor-toolbar.js` → `editor.js`.
+Load order matters (classic `<script src>` tags, no modules). The signer
+stack always loads first: `vendor/nostr-crypto.js` → `signer-core.js` →
+`signer.js` → `signer-nip46.js`. The login page then adds `login.js`; the
+editor page adds `editor-md.js` → `editor-toolbar.js` → `editor.js`.
 
 ## vendor/
 

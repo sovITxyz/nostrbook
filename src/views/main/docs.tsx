@@ -6,7 +6,7 @@ export function DocsPage() {
   return (
     <Layout
       title="Docs — nbread.lol"
-      description="How nbread.lol works: NIP-07 sign-in, handles, the markdown editor, feeds, theme CSS, and relays."
+      description="How nbread.lol works: signing in with your Nostr key, handles, the markdown editor, feeds, theme CSS, and relays."
     >
       <SiteHeader current="docs" />
       <main class="info-page">
@@ -22,8 +22,15 @@ export function DocsPage() {
 
         <h2>Signing in</h2>
         <p>
-          You need a NIP-07 browser extension such as Alby or nos2x. You sign
-          a one-time challenge; your keys never leave the extension.
+          Sign in with your Nostr key, whichever way you keep it. Four
+          options: a NIP-07 browser extension such as Alby or nos2x; a remote
+          signer like Amber or nsec.app via a <code>bunker://</code> link
+          (NIP-46); Amber directly on Android (NIP-55); or pasting your
+          secret key. Whichever you pick, you only sign a one-time challenge.
+          With an extension or signer app your keys never leave it. The
+          pasted-key option stores your secret key unencrypted in this
+          browser's localStorage — anyone with access to the browser can read
+          it, so prefer one of the other options if you can.
         </p>
 
         <h2>Claiming a handle</h2>
@@ -36,9 +43,10 @@ export function DocsPage() {
         <h2>Writing</h2>
         <p>
           The built-in editor is markdown with a formatting toolbar and a
-          live server preview; publish with <em>Sign & publish</em> via
-          NIP-07. Or publish long-form from any Nostr client — the blog syncs
-          from your relays within about 15 minutes.
+          live server preview; publish with <em>Sign & publish</em> using
+          whichever signer you signed in with. Or publish long-form from any
+          Nostr client — the blog syncs from your relays within about 15
+          minutes.
         </p>
 
         <h2>Your blog</h2>

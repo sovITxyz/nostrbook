@@ -48,9 +48,10 @@ export function MainHome() {
             <code>handle@nbread.lol</code> everywhere on Nostr.
           </li>
           <li>
-            <strong>Write anywhere</strong> — the built-in markdown editor
-            with NIP-07 signing, or any Nostr client; your blog stays in sync
-            with the relays.
+            <strong>Write anywhere</strong> — the built-in markdown editor,
+            signing in with your Nostr key (browser extension, Amber, or a
+            remote signer), or any Nostr client; your blog stays in sync with
+            the relays.
           </li>
           <li>
             <strong>Make it yours</strong> — custom theme CSS, no build step

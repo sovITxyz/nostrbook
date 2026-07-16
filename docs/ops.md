@@ -320,3 +320,11 @@ see the manual-check notes at the bottom of `scripts/smoke.sh`).
 Rollback: `wrangler deployments list` + `wrangler rollback` restore the
 previous Worker version; DNS records can stay (the guard 404s anything it
 does not recognize).
+
+## 7. Vendor crypto bundle
+
+`public/js/vendor/nostr-crypto.js` is generated from
+`scripts/vendor/crypto-entry.js` by `npm run build:vendor` (esbuild,
+devDependency only — deploy never builds) and committed unminified. Never
+edit the artifact by hand: edit the entry, rebuild, commit both. CI rebuilds
+and fails on any drift between the entry and the committed bundle.
