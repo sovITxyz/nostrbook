@@ -138,6 +138,35 @@ check_post() {
   fi
 }
 
+# check_accept <desc> <expected-code> <host> <path> <accept>
+# Like check(), but sends an Accept header — used for the NIP-11 relay
+# document (application/nostr+json). Leaves the response body in
+# /tmp/smoke_body and headers in /tmp/smoke_headers for the check_body_contains
+# / check_header_contains assertions that follow.
+check_accept() {
+  local desc="$1" expected="$2" host_header="$3" path="$4" accept="$5"
+  local args=(-s -o /tmp/smoke_body -D /tmp/smoke_headers -w '%{http_code}' \
+    --max-time 15 -H "Accept: $accept")
+  local url
+  if [[ "$TARGET" == "local" ]]; then
+    url="$BASE$path"
+    if [[ -n "$host_header" ]]; then
+      args+=(-H "X-Forwarded-Host: $host_header")
+    fi
+  else
+    url="https://$host_header$path"
+  fi
+  local code
+  code=$(curl "${args[@]}" "$url" || echo "000")
+  if [[ "$code" == "$expected" ]]; then
+    echo "PASS  [$code] $desc"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL  [$code != $expected] $desc"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
 # --- P0: hello checks ---------------------------------------------------------
 check "apex / responds 200" 200 "$MAIN_HOST" "/"
 check_body_contains "apex / mentions nbread.lol" "nbread.lol"
@@ -231,6 +260,18 @@ fi
 # hides it from anonymous callers — 404 either way.
 check "admin surface hidden (disabled or anonymous)" 404 "$MAIN_HOST" "/admin"
 check_post "admin actions hidden too" 404 "$MAIN_HOST" "/admin/block" '{"target":"alice"}'
+
+# --- P8: first-party relay (#5) --------------------------------------------------
+# A bare GET is the plain-text info page (Worker-served, no DO cost); the
+# NIP-11 document comes back only for Accept: application/nostr+json. The ws
+# upgrade itself is exercised by the integration suite (curl can't drive a
+# NIP-01 session) and by the manual checklist, not here.
+check "relay info page responds 200" 200 "$MAIN_HOST" "/relay"
+check_body_contains "relay info page names the ws endpoint" "wss://$MAIN_HOST/relay"
+check_accept "relay serves the NIP-11 document" 200 "$MAIN_HOST" "/relay" "application/nostr+json"
+check_body_contains "relay NIP-11 advertises NIP-42" '"supported_nips":\[1,9,11,42\]'
+check_body_contains "relay NIP-11 restricts writes" '"restricted_writes":true'
+check_header_contains "relay NIP-11 sends CORS *" "access-control-allow-origin: \*"
 
 # --- P5 MANUAL check (documented, not automated): full write→render loop ---------
 # The end-to-end publish flow needs a REAL NIP-07 extension signing in a real

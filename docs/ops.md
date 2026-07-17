@@ -83,6 +83,8 @@ abuse bounds, not politeness.
 | `GET /search` | `search:ip` → 30/min (non-empty `q` only) | — | FTS MATCH (sanitized) + join, LIMIT 20 |
 | `GET /npub1…` (+ `/rss.xml`, `/atom.xml`, `/:slug`) | `npub:ip` → 60/min *(P7)*; relay mirror sessions additionally: per-pubkey cooldown 300s (Cache API marker) + `npub-mirror:ip` → 30/day + `npub-mirror:global` → 500/day, ≤10 verifications/session | — | ≤100-row post list per view (the P7 limiter closes the unmetered-read gap) |
 | `GET /.well-known/nostr.json` | — | `max-age=300` | 1-row indexed read (WAF backstop); blocked/unknown → `{"names":{}}` |
+| `GET /relay` (ws upgrade) | `relay:ip` → 30/10min (Worker-side, **fail closed**) | — | denied upgrade never spends a DO request; accepted → one DO request opening a hibernatable ws session (no duration billing). Registered on the outer app **before** `securityHeaders` (a 101 is immutable) |
+| `GET /relay` (NIP-11 / info) | — | `max-age=3600` (NIP-11 doc) | Worker-served, **zero DO cost**: `Accept: application/nostr+json` → NIP-11 document (`CORS *`); bare GET → plain-text info page. Per-ws-session budgets live in the DO (`relay:ev:pk` 30/5min, `relay:global:store` 500/day, 256 concurrent conns, 120 msg/min/conn) |
 | `GET /admin` | ADMIN_PUBKEY gate (404 otherwise) | — | 1 KV session read + ≤200-row blocked list |
 | `POST /admin/block`, `POST /admin/unblock` | gate + `admin:pk` → 30/5min *(P7)* | — | 1 D1 write + 1 KV gen bump |
 
@@ -144,6 +146,12 @@ them.** Configure once after Gate B:
   document plus a couple of same-origin assets; post images/media load from
   external origins — so 6 rps sustained is far above human browsing. Shared
   NAT (CGNAT) bursts may occasionally trip it; mitigation lasts only 10s.
+  **Relay note**: a `wss://nbread.lol/relay` connection counts as **one**
+  request against this rule — the HTTP UPGRADE handshake. WebSocket frames
+  after the upgrade are NOT individual zone requests, so the rule does not
+  bound relay message throughput (the DO's own per-connection 120 msg/min and
+  the Worker-side `relay:ip` 30/10min upgrade limit do that); it only bounds
+  the rate of new connections from one IP.
 - **Then take action**: **Block**
 - **For duration**: 10 seconds (free-plan mitigation timeout)
 - **Why 60, and when to tighten**: the WAF is the ONLY control over the
@@ -196,6 +204,7 @@ editor's slugify never mints such shapes.
 | **D1 rows written** | 100,000 | **All limiters fail CLOSED** → 429s on challenge/login/discover-miss/search/npub/mirror; nonce issuance fails → logins stop | This is the deliberate fail-safe posture: the platform read paths (cached blogs, discover hits) keep serving. WAF-block the source; wait for reset |
 | **Cache API** | best-effort | All cache layers degrade to uncached (every layer is try/caught) → D1/CPU load rises, correctness unchanged | Watch D1 budgets (above); usually transient |
 | **Worker requests** | 100,000/day | Cloudflare serves errors once exceeded | WAF rate rule is the main dial; scanner-path block cuts the noise floor |
+| **Durable Object requests** | 100,000/day (free plan, SQLite backend) | The relay stops accepting connections — `wss://nbread.lol/relay` upgrades error; existing ws sessions may drop. **Blogs, editor, `/api/mirror`, and cron are unaffected** — the relay is **additive, never load-bearing** (its store is the shared D1 `events` table, so nothing published is lost) | WAF-block the upgrade source; the Worker-side `relay:ip` 30/10min + the DO's 256-concurrent-conn cap bound the burn. Hibernating connections accrue **no duration billing**, and protocol pings are auto-ponged without waking the object; quota resets daily (UTC) |
 
 Observability is enabled in `wrangler.jsonc`; `wrangler tail` gives live
 logs (rate-limit denials log their key via `console.error` on D1 failures

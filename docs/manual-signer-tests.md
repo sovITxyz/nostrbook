@@ -125,3 +125,43 @@ With the pasted-key (local) signer configured:
       signed events (pubkey + sig) and the public key ever leave the page.
 - [ ] Repeat the sweep once for a NIP-46 session: WebSocket frames to the
       bunker relay carry only encrypted kind 24133 envelopes.
+
+## 8. First-party relay (`wss://nbread.lol/relay`) — issue #5
+
+The editor prepends the first-party relay to every publish broadcast, so a
+normal publish already exercises the write path. These checks confirm the
+relay is externally reachable and enforces NIP-42 auth + the claimed-handle
+allowlist. Uses [`nak`](https://github.com/fiatjaf/nak) (any NIP-01 CLI works).
+
+- [ ] **NIP-11 reachable**: `nak relay wss://nbread.lol/relay` (or
+      `curl -H "Accept: application/nostr+json" https://nbread.lol/relay`)
+      returns the document with `supported_nips` including `42` and
+      `limitation.restricted_writes: true`.
+- [ ] **Publish → relay readback**: publish a post from the editor (any
+      signer), then read it straight back off the first-party relay by author:
+      `nak req -k 30023 -a <your-hex-pubkey> wss://nbread.lol/relay` returns
+      your 30023 event (and EOSE), and the same post is live at
+      `https://<handle>.nbread.lol/<slug>` — relay and blog agree because they
+      share one store.
+- [ ] **Claimed key writes (NIP-42)**: with your CLAIMED nbread key,
+      `nak event -k 30023 -c "relay auth test" --sec <nsec> --auth
+      wss://nbread.lol/relay` — nak answers the `AUTH` challenge, signs the
+      kind 22242, and the relay returns `OK … true`; the event is then
+      readable via `nak req`.
+- [ ] **Unclaimed key refused**: repeat the previous step with a key that has
+      NO claimed nbread handle. After AUTH succeeds, the EVENT is rejected with
+      `OK … false "restricted: writes are limited to claimed nbread.lol
+      handles"` — nothing is stored.
+- [ ] **Unauthenticated write refused**: `nak event -k 30023 --sec <nsec>
+      wss://nbread.lol/relay` WITHOUT `--auth` → `OK … false
+      "auth-required: …"` and no post appears.
+- [ ] **Wrong kind refused**: `nak event -k 1 -c hi --sec <claimed-nsec>
+      --auth wss://nbread.lol/relay` → `OK … false "restricted: only kinds
+      30023, 5, and 0 are accepted"`.
+- [ ] **Delete propagates**: delete a post from the editor (kind 5), then
+      `nak req -k 30023 -a <your-hex-pubkey> wss://nbread.lol/relay` no longer
+      returns the tombstoned post (but `-k 5` still returns the delete marker).
+- [ ] **External client reads an nbread post**: open the post's `naddr`/`nevent`
+      on a third-party long-form reader (e.g. habla.news) configured to include
+      `wss://nbread.lol/relay`, and confirm it loads the nbread-hosted 30023 —
+      reads are open (no auth) to anyone.
