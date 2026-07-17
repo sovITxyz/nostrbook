@@ -40,6 +40,13 @@ describe("info pages (/privacy /terms /docs)", () => {
     const docs = await SELF.fetch("https://nbread.lol/docs");
     expect(await docs.text()).toContain("AGPL");
   });
+
+  it("/docs documents the first-party relay", async () => {
+    const res = await SELF.fetch("https://nbread.lol/docs");
+    const html = await res.text();
+    expect(html).toContain("wss://nbread.lol/relay");
+    expect(html).toContain("NIP-42");
+  });
 });
 
 describe("apex 404", () => {

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { DispatchEnv } from "../types";
+import { selfRelayUrl } from "../relay/url";
 
 /**
  * NIP-05: GET /.well-known/nostr.json?name=<local-part> → {names:{<name>:
@@ -39,9 +40,16 @@ wellknownRoutes.get("/nostr.json", async (c) => {
   if (!row || row.blocked) {
     return c.json({ names: {} }, 200, CORS_HEADERS);
   }
-  const relays = c.env.RELAYS.split(",")
-    .map((r) => r.trim())
-    .filter((r) => r.length > 0);
+  // Relay hints: the first-party nbread relay first (it always carries this
+  // user's mirrored events), then the service defaults from env.RELAYS.
+  const relays = [
+    ...new Set([
+      selfRelayUrl(c.env),
+      ...c.env.RELAYS.split(",")
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0),
+    ]),
+  ];
   return c.json(
     {
       names: { [name]: row.pubkey },

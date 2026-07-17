@@ -18,6 +18,7 @@ import { renderPost } from "../markdown";
 import { sanitizeCss, MAX_THEME_CSS_LENGTH } from "../markdown/css-sanitize";
 import { firstTagValue, isoDate, postMeta } from "../markdown/nip23";
 import { relayList } from "../cron/refresh";
+import { selfRelayUrl } from "../relay/url";
 import { DashboardPage, type DashboardPost } from "../views/main/dashboard";
 import { EditorPage } from "../views/main/editor";
 
@@ -137,12 +138,19 @@ function clientIp(c: Context<DispatchEnv>): string {
 }
 
 /**
- * Relays the editor should broadcast to: the user's configured list, falling
- * back to the service defaults (RELAYS env var) when none are set.
+ * Relays the editor should broadcast to: the first-party nbread relay first
+ * (every publish lands on wss://MAIN_HOST/relay), then the user's configured
+ * list, falling back to the service defaults (RELAYS env var) when none are
+ * set. Deduped in case the user configured the nbread relay themselves.
  */
 function editorRelays(env: Env, user: User | null): string[] {
   const configured = readBlogSettings(user?.settings ?? "{}").relays;
-  return configured.length > 0 ? configured : relayList(env);
+  return [
+    ...new Set([
+      selfRelayUrl(env),
+      ...(configured.length > 0 ? configured : relayList(env)),
+    ]),
+  ];
 }
 
 /**

@@ -11,7 +11,7 @@ export function DocsPage() {
       <SiteHeader current="docs" />
       <main class="info-page">
         <h1>Docs</h1>
-        <p class="updated">Last updated: 2026-07-14</p>
+        <p class="updated">Last updated: 2026-07-16</p>
 
         <h2>What is nbread.lol</h2>
         <p>
@@ -92,6 +92,13 @@ body { font-family: Georgia, serif; }
         <p>
           Defaults: relay.damus.io, nos.lol, and relay.nostr.band. Set your
           own in the dashboard.
+        </p>
+        <p>
+          nbread also runs a first-party relay at{" "}
+          <code>wss://nbread.lol/relay</code>. Anyone can read from it with
+          any Nostr client; writes are restricted to claimed nbread handles
+          (NIP-42 auth). Posts published in the editor are broadcast to it
+          automatically.
         </p>
 
         <h2>Unclaimed blogs</h2>

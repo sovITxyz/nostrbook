@@ -281,6 +281,8 @@ describe("editor pages", () => {
     expect(html).toContain('id="editor-form"');
     expect(html).toContain("/js/editor.js");
     expect(html).toContain('id="editor-config"');
+    // Broadcast list leads with the first-party relay (then defaults).
+    expect(html).toContain('"relays":["wss://nbread.lol/relay"');
   });
 
   it("loads an existing post into the editor by slug", async () => {

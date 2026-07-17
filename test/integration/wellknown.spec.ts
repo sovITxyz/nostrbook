@@ -29,7 +29,9 @@ describe("/.well-known/nostr.json (NIP-05)", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(res.headers.get("content-type")).toContain("application/json");
     expect(body.names).toEqual({ alice: ALICE_PK });
-    // Optional relays object: pubkey → relay list from env.RELAYS.
+    // Optional relays object: the first-party relay hint leads, then the
+    // env.RELAYS defaults.
+    expect(body.relays?.[ALICE_PK]?.[0]).toBe("wss://nbread.lol/relay");
     expect(body.relays?.[ALICE_PK]).toContain("wss://relay.damus.io");
   });
 

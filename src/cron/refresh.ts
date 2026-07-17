@@ -20,6 +20,7 @@ import { fetchEvents } from "../nostr/relay";
 import { bumpGen, mirrorEvent } from "../services/mirror";
 import { storedEventIds } from "../services/events";
 import type { NostrEvent } from "../nostr/event";
+import { isSelfRelayHost } from "../relay/url";
 
 /** Max NEW events verified+mirrored per user per cron run (contract: ~5). */
 export const REFRESH_VERIFY_CAP = 5;
@@ -166,7 +167,13 @@ async function refreshUser(
   // their own relays would otherwise never be mirrored by cron. Merge their
   // list ahead of the service defaults (deduped).
   const configured = readBlogSettings(user.settings).relays;
-  const relays = [...new Set([...configured, ...baseRelays])];
+  // Filter out our own first-party relay AFTER the merge (users may paste
+  // wss://nbread.lol/relay into their settings): a Worker-to-own-zone ws
+  // subrequest won't reliably re-enter this Worker, and the relay shares the
+  // same D1 events store anyway — reading ourselves is a no-op at best.
+  const relays = [...new Set([...configured, ...baseRelays])].filter(
+    (url) => !isSelfRelayHost(url, env),
+  );
   const since = readSince(user.settings);
   const { events: collected, windowClosed } = await collectBacklog(
     relays,

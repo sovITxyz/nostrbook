@@ -70,6 +70,29 @@ describe("cron refresh — user-configured relays participate in sync", () => {
     expect(row?.id).toBe(aliceHello.id);
   });
 
+  it("never dials the first-party nbread relay, even when configured", async () => {
+    // Users may paste wss://nbread.lol/relay into their settings. Cron must
+    // filter it out: a Worker-to-own-zone ws subrequest won't reliably
+    // re-enter the Worker, and the relay shares the same D1 store anyway.
+    const SELF_RELAY = "wss://nbread.lol/relay";
+    await env.DB.prepare("UPDATE users SET settings = ? WHERE pubkey = ?")
+      .bind(JSON.stringify({ relays: [SELF_RELAY, USER_RELAY] }), ALICE_PK)
+      .run();
+    const dialed: string[] = [];
+    serveEventsByUrl({ [USER_RELAY]: [aliceHello] }, dialed);
+
+    await runScheduled();
+
+    expect(dialed).not.toContain(SELF_RELAY);
+    expect(dialed).toContain(USER_RELAY); // other configured relays survive
+    const row = await env.DB.prepare(
+      "SELECT id FROM events WHERE pubkey = ? AND d_tag = 'hello-world'",
+    )
+      .bind(ALICE_PK)
+      .first<{ id: string }>();
+    expect(row?.id).toBe(aliceHello.id);
+  });
+
   it("still syncs from the defaults when the user configured nothing", async () => {
     const dialed: string[] = [];
     serveEventsByUrl(
