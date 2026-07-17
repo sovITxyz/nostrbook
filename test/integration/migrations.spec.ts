@@ -46,6 +46,7 @@ describe("migrations/0001_init.sql", () => {
         "about",
         "root",
         "_dmarc",
+        "relay", // seeded by 0005_relay.sql (first-party relay endpoint)
       ].sort(),
     );
   });

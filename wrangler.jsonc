@@ -29,6 +29,25 @@
       "id": "d01e2e69d35549bb8ee153ac4007dbe2"
     }
   ],
+  // First-party relay (#5): single global DO (idFromName("relay:v1")) behind
+  // wss://nbread.lol/relay. WebSocket Hibernation API, no alarms/timers —
+  // hibernating objects accrue zero duration charges.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RELAY_DO",
+        "class_name": "RelayDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      // Free plan REQUIRES the SQLite storage backend for Durable Objects
+      // (new_sqlite_classes, NOT new_classes).
+      "new_sqlite_classes": ["RelayDO"]
+    }
+  ],
   "vars": {
     "MAIN_HOST": "nbread.lol",
     // Fail closed: the committed config is production-safe. Local dev gets

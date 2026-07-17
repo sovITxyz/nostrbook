@@ -13,6 +13,7 @@ import { authRoutes } from "./routes/auth";
 import { dashboardRoutes } from "./routes/dashboard";
 import { adminRoutes } from "./routes/admin";
 import { wellknownRoutes } from "./routes/wellknown";
+import { relayEndpoint } from "./relay/http";
 import { MainNotFound } from "./views/main/not-found";
 
 /**
@@ -62,6 +63,13 @@ blogApp.route("/", tenantRoutes);
 
 // --- Outer app ----------------------------------------------------------------
 export const app = new Hono<AppEnv>();
+
+// First-party relay endpoint BEFORE the middleware stack: a successful
+// WebSocket upgrade is an immutable 101 response (securityHeaders'
+// headers.set() would throw on it), and guard/tenant/csrf/session must never
+// run per-upgrade. The handler does its own host self-check and sets its own
+// headers (src/relay/http.ts).
+app.all("/relay", relayEndpoint);
 
 // Security headers FIRST so they wrap every outcome — including guard 404s
 // (unknown hosts), tenant 404s (unclaimed/blocked subdomains), and cache
