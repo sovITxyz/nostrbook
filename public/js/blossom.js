@@ -8,7 +8,8 @@
 // with NbreadSigner -> PUT the raw bytes to the PRIMARY server's /upload ->
 // validate the returned descriptor (https URL + sha match) -> best-effort
 // mirror the URL (BUD-04, no re-upload) to the remaining servers. On a
-// network/5xx/429/timeout failure the next server is promoted to primary.
+// any per-server failure the next server is promoted to primary, so the
+// whole mirror set is tried before an upload is reported as failed.
 //
 // Load order (classic <script> includes, no modules):
 //   vendor/nostr-crypto.js -> signer stack -> blossom.js -> editor-toolbar.js
@@ -294,17 +295,14 @@
           },
           function (err) {
             lastErr = err;
-            // 4xx (except 429) is an auth/permission problem — surface it.
-            if (
-              err &&
-              typeof err.status === "number" &&
-              err.status >= 400 &&
-              err.status < 500 &&
-              err.status !== 429
-            ) {
-              throw err;
-            }
-            // network error / 5xx / 429 / timeout: promote the next server.
+            // Advance to the next server on ANY failure. Different public
+            // Blossom servers have different upload policies, rate limits,
+            // and transient errors (a 4xx from one — throttle, whitelist,
+            // size/type quirk — or a 5xx/network blip must not abort the
+            // others), so we exhaust the whole mirror set before giving up.
+            // Only when every server has failed does attempt() reject with
+            // the last error. Client-side validateFile already caps size and
+            // type, so this can't loop on an oversized/unsupported blob.
             return attempt(i + 1);
           },
         );
