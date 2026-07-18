@@ -75,7 +75,15 @@ export const BLOG_CSP =
 export const APEX_CSP =
   "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; " +
   "style-src 'self' 'unsafe-inline'; img-src * data:; media-src *; " +
-  "connect-src 'self' wss:; frame-src https://challenges.cloudflare.com; " +
+  // connect-src: 'self' (login/preview/mirror fetches) + wss: (client-side
+  // relay broadcast to user-chosen relays) + the four Blossom media servers
+  // the editor uploads images to via browser PUT (BUD-02 /upload, BUD-04
+  // /mirror). These are XHR/fetch destinations only, NOT script sources
+  // (script-src is untouched); img-src * already covers displaying the
+  // resulting image URLs on any host.
+  "connect-src 'self' wss: https://blossom.band https://blossom.nostr.build " +
+  "https://nostr.download https://cdn.nostrcheck.me; " +
+  "frame-src https://challenges.cloudflare.com; " +
   "form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 
 /** Referrer policy applied to every response (both host classes). */

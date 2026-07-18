@@ -85,8 +85,12 @@ describe("apex class", () => {
     // The CSP must actually permit what the page uses: same-origin scripts.
     expect(await res.text()).toContain('src="/js/login.js"');
     expect(APEX_CSP).toContain("script-src 'self'");
-    // …and the editor's relay broadcast (wss:) + same-origin fetches.
-    expect(APEX_CSP).toContain("connect-src 'self' wss:");
+    // …and the editor's relay broadcast (wss:) + same-origin fetches + the
+    // four Blossom media servers the editor uploads images to (browser PUT).
+    expect(APEX_CSP).toContain(
+      "connect-src 'self' wss: https://blossom.band https://blossom.nostr.build " +
+        "https://nostr.download https://cdn.nostrcheck.me;",
+    );
     // …and the Turnstile script + iframe on the dashboard claim form.
     expect(APEX_CSP).toContain("https://challenges.cloudflare.com");
   });
