@@ -35,6 +35,7 @@ import { CACHE_STATUS_HEADER, defaultCache } from "../middleware/cache";
 import type { BlogProfile } from "../views/tenant/layout";
 import { BlogHome } from "../views/tenant/home";
 import { PostPage } from "../views/tenant/post";
+import { postZap } from "./tenant";
 import { NotFoundPage } from "../views/tenant/not-found";
 import { rssFeed, atomFeed } from "../views/tenant/xml";
 
@@ -495,7 +496,12 @@ async function npubProfile(
 ): Promise<BlogProfile | null> {
   const row = await getProfileRow(env, pubkey);
   return row
-    ? { name: row.name, picture: row.picture, about: row.about }
+    ? {
+        name: row.name,
+        picture: row.picture,
+        about: row.about,
+        lud16: row.lud16,
+      }
     : null;
 }
 
@@ -614,6 +620,7 @@ mainRoutes.get(`${NPUB_PARAM}/:slug`, async (c) => {
   if (bodyHtml === null) return notFoundNpub(c);
 
   const profile = await npubProfile(c.env, r.pubkey);
+  const zap = await postZap(c.env, r.pubkey, slug, profile?.lud16);
   return c.html(
     PostPage({
       handle: displayNpub(r.npub),
@@ -623,6 +630,7 @@ mainRoutes.get(`${NPUB_PARAM}/:slug`, async (c) => {
       themeCss: "",
       mainHost,
       basePath: `/${r.npub}`,
+      zap,
     }),
   );
 });

@@ -1,6 +1,7 @@
 import {
   DISCOVER_PAGE_SIZE,
   FEED_SELECT_COLUMNS,
+  FEED_ZAP_JOIN,
   type FeedRow,
 } from "./events";
 
@@ -83,6 +84,7 @@ export async function searchPosts(
        FROM posts_fts
        JOIN events e ON e.rowid = posts_fts.rowid
        JOIN users u ON u.pubkey = e.pubkey
+       ${FEED_ZAP_JOIN}
        WHERE posts_fts MATCH ?1
          AND e.kind = 30023 AND e.deleted = 0
          AND u.handle IS NOT NULL AND u.blocked = 0

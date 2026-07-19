@@ -19,6 +19,9 @@ export type FeedItem = {
   url: string;
   /** Absolute URL of the author's blog home. */
   blogUrl: string;
+  /** Zap rollup (#12): whole sats + receipt count; 0/0 when never zapped. */
+  zapSats: number;
+  zapCount: number;
 };
 
 /** Map joined event rows to renderable feed items. */
@@ -41,6 +44,11 @@ export function feedItems(rows: FeedRow[], mainHost: string): FeedItem[] {
           ? blogUrl
           : `${blogUrl}${encodeURIComponent(meta.slug)}`,
       blogUrl,
+      zapSats:
+        typeof row.zap_msat === "number" && row.zap_msat > 0
+          ? Math.floor(row.zap_msat / 1000)
+          : 0,
+      zapCount: typeof row.zap_count === "number" ? row.zap_count : 0,
     };
   });
 }
@@ -60,6 +68,13 @@ export function FeedList(props: { items: FeedItem[] }) {
           <time class="post-date" datetime={item.date}>
             {item.date}
           </time>
+          {item.zapCount > 0 ? (
+            <span class="post-zaps">
+              {" "}
+              ⚡ {item.zapSats.toLocaleString("en-US")} sats ·{" "}
+              {item.zapCount} {item.zapCount === 1 ? "zap" : "zaps"}
+            </span>
+          ) : null}
           {item.summary ? <p class="post-summary">{item.summary}</p> : null}
         </li>
       ))}

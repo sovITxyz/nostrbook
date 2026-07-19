@@ -10,8 +10,11 @@ import {
   rowToEvent,
 } from "../services/events";
 import { getProfile as getProfileRow } from "../services/profiles";
+import { safeLud16, zapTotals } from "../services/zaps";
+import { naddrEncode } from "../nostr/nip19";
+import { selfRelayUrl } from "../relay/url";
 import { BlogHome } from "../views/tenant/home";
-import { PostPage } from "../views/tenant/post";
+import { PostPage, type PostZap } from "../views/tenant/post";
 import { NotFoundPage } from "../views/tenant/not-found";
 import { rssFeed, atomFeed, sitemapXml } from "../views/tenant/xml";
 
@@ -49,7 +52,12 @@ const d1Provider: TenantDataProvider = {
   async getProfile(env, pubkey) {
     const row = await getProfileRow(env, pubkey);
     if (!row) return null;
-    return { name: row.name, picture: row.picture, about: row.about };
+    return {
+      name: row.name,
+      picture: row.picture,
+      about: row.about,
+      lud16: row.lud16,
+    };
   },
   async listPosts(env, pubkey) {
     const rows = await listPostsByPubkey(env, pubkey);
@@ -123,6 +131,40 @@ function notFound(c: Context<DispatchEnv>) {
   const handle =
     site.type === "blog" && site.user.handle ? site.user.handle : undefined;
   return c.html(NotFoundPage({ handle }), 404);
+}
+
+/**
+ * Zap affordance for a post (#12 v1): only when the author's kind 0 carries
+ * a shape-valid lud16. The naddr hints our first-party relay so a hand-off
+ * client can find the post; totals come from the zap_totals rollup. A d-tag
+ * too long for nip19 TLV (255 bytes) simply drops the affordance.
+ */
+export async function postZap(
+  env: Env,
+  pubkey: string,
+  dTag: string,
+  lud16Raw: string | null | undefined,
+): Promise<PostZap | null> {
+  const lud16 = safeLud16(lud16Raw);
+  if (lud16 === null) return null;
+  let naddr: string;
+  try {
+    naddr = naddrEncode({
+      identifier: dTag,
+      pubkey,
+      kind: 30023,
+      relays: [selfRelayUrl(env)],
+    });
+  } catch {
+    return null;
+  }
+  const totals = await zapTotals(env, `30023:${pubkey}:${dTag}`);
+  return {
+    lud16,
+    naddr,
+    msatTotal: totals?.msatTotal ?? 0,
+    zapCount: totals?.zapCount ?? 0,
+  };
 }
 
 /** Routes served on blog subdomains (<handle>.MAIN_HOST). */
@@ -216,6 +258,7 @@ tenantRoutes.get("/:slug", async (c) => {
     return notFound(c);
   }
   const profile = await provider.getProfile(c.env, ctx.pubkey);
+  const zap = await postZap(c.env, ctx.pubkey, slug, profile?.lud16);
   return c.html(
     PostPage({
       handle: ctx.handle,
@@ -225,6 +268,7 @@ tenantRoutes.get("/:slug", async (c) => {
       about: ctx.about,
       themeCss: ctx.themeCss,
       mainHost: ctx.mainHost,
+      zap,
     }),
   );
 });

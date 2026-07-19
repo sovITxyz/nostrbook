@@ -121,7 +121,15 @@ export const FEED_CONTENT_PREFIX_CHARS = 2048;
 export const FEED_SELECT_COLUMNS =
   "e.id, e.pubkey, e.kind, e.d_tag, e.created_at, e.tags, " +
   `substr(e.content, 1, ${FEED_CONTENT_PREFIX_CHARS}) AS content, ` +
-  "u.handle AS handle";
+  "u.handle AS handle, zt.msat_total AS zap_msat, zt.zap_count AS zap_count";
+
+/**
+ * LEFT JOIN clause pairing FEED_SELECT_COLUMNS' zap columns (#12): the
+ * zap_totals rollup keyed by the post's a-coordinate. The concatenation
+ * resolves per row and then hits zap_totals' PRIMARY KEY index — no scan.
+ */
+export const FEED_ZAP_JOIN =
+  "LEFT JOIN zap_totals zt ON zt.address = '30023:' || e.pubkey || ':' || e.d_tag";
 
 /**
  * A slim feed row: the events columns the discover/search pages actually
@@ -131,7 +139,7 @@ export const FEED_SELECT_COLUMNS =
 export type FeedRow = Pick<
   EventRow,
   "id" | "pubkey" | "kind" | "d_tag" | "created_at" | "content" | "tags"
-> & { handle: string };
+> & { handle: string; zap_msat: number | null; zap_count: number | null };
 
 /**
  * Recent posts across ALL claimed, non-blocked users, newest first (P6
@@ -163,6 +171,7 @@ export async function listRecentClaimedPosts(
     `SELECT ${FEED_SELECT_COLUMNS}
      FROM events e
      JOIN users u ON u.pubkey = e.pubkey
+     ${FEED_ZAP_JOIN}
      WHERE e.kind = 30023 AND e.deleted = 0
        AND u.handle IS NOT NULL AND u.blocked = 0
      ORDER BY e.created_at DESC, e.id ASC

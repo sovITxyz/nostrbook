@@ -34,6 +34,7 @@ const fixtureProvider: TenantDataProvider = {
           name: aliceKind0.name,
           picture: aliceKind0.picture,
           about: aliceKind0.about,
+          lud16: null,
         }
       : null,
   listPosts: async (_env, pubkey) =>

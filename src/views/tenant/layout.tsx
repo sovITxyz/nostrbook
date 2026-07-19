@@ -12,6 +12,9 @@ export type BlogProfile = {
   name: string | null;
   picture: string | null;
   about: string | null;
+  /** Lightning address from the kind 0 (zap affordance) — untrusted; views
+   *  must gate on safeLud16 before building any href from it. */
+  lud16: string | null;
 };
 
 /**

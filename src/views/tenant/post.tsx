@@ -3,7 +3,21 @@ import type { NostrEvent } from "../../nostr/event";
 import { postMeta, isoDate } from "../../markdown/nip23";
 
 /**
- * Post page: title, published_at, rendered content.
+ * Zap affordance data (#12 v1), precomputed by the ROUTE: `lud16` has passed
+ * safeLud16 (shape-validated, safe inside a `lightning:` href) and `naddr`
+ * is our own nip19 encoding of the post address. Totals come from the
+ * zap_totals rollup. Everything renders as plain server-side links/text —
+ * blog pages stay JS-free (BLOG_CSP has no script-src).
+ */
+export type PostZap = {
+  lud16: string;
+  naddr: string;
+  msatTotal: number;
+  zapCount: number;
+};
+
+/**
+ * Post page: title, published_at, rendered content, zap footer.
  *
  * `bodyHtml` is the renderPost output (markdown-it html:false + allowlist
  * sanitizer) that mirrorEvent stored at INGEST time (events.rendered) — the
@@ -19,9 +33,12 @@ export function PostPage(props: {
   themeCss?: string;
   mainHost: string;
   basePath?: string;
+  zap?: PostZap | null;
 }) {
   const meta = postMeta(props.event);
   const date = isoDate(meta.published_at);
+  const zap = props.zap ?? null;
+  const sats = zap ? Math.floor(zap.msatTotal / 1000) : 0;
 
   return (
     <BlogLayout
@@ -47,6 +64,33 @@ export function PostPage(props: {
             class="post-content"
             dangerouslySetInnerHTML={{ __html: props.bodyHtml }}
           />
+          {zap ? (
+            <footer class="post-zap">
+              <p>
+                {/* Hand-off to a Nostr client for an ATTRIBUTED zap (its 9735
+                    references this post and feeds the counts); the lightning:
+                    link is the walletless plain-tip fallback (no receipt, not
+                    counted). */}
+                <a
+                  href={`https://njump.me/${zap.naddr}`}
+                  rel="noopener nofollow"
+                >
+                  ⚡ Zap this post
+                </a>
+                {" · "}
+                <a href={`lightning:${zap.lud16}`} rel="nofollow">
+                  tip {zap.lud16}
+                </a>
+                {zap.zapCount > 0 ? (
+                  <span class="zap-totals">
+                    {" · "}
+                    {sats.toLocaleString("en-US")} sats · {zap.zapCount}{" "}
+                    {zap.zapCount === 1 ? "zap" : "zaps"}
+                  </span>
+                ) : null}
+              </p>
+            </footer>
+          ) : null}
         </article>
       </main>
     </BlogLayout>

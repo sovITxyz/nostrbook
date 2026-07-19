@@ -19,6 +19,7 @@ import { readBlogSettings, type User } from "../services/users";
 import { fetchEvents } from "../nostr/relay";
 import { bumpGen, mirrorEvent } from "../services/mirror";
 import { storedEventIds } from "../services/events";
+import { refreshZapsForUser } from "../services/zaps";
 import type { NostrEvent } from "../nostr/event";
 import { isSelfRelayHost } from "../relay/url";
 
@@ -243,6 +244,13 @@ export async function runRefresh(
     } catch (err) {
       // One user's relay trouble must not sink the whole run.
       console.error(`refresh failed for ${user.pubkey}:`, err);
+    }
+    // Zap receipt pass (#12): independent try — a broken LNURL endpoint or
+    // relay must not cost the user their post sync (or vice versa).
+    try {
+      await refreshZapsForUser(env, relays, user);
+    } catch (err) {
+      console.error(`zap refresh failed for ${user.pubkey}:`, err);
     }
   }
 }
