@@ -167,7 +167,6 @@ describe("parseZapReceipt", () => {
         "request a mismatch",
         zapReceipt({ request: zapRequest({ a: `30023:${ALICE_PK}:other` }) }),
       ],
-      ["request has no amount", zapReceipt({ request: zapRequest({ amount: null }) })],
       [
         "bolt11 disagrees with the request amount",
         zapReceipt({ bolt11: "lnbc20u1qqq" }),
@@ -183,6 +182,16 @@ describe("parseZapReceipt", () => {
     for (const [label, ev] of cases) {
       expect(parseZapReceipt(ev, ALICE_PK), label).toBeNull();
     }
+  });
+
+  it("accepts a request WITHOUT an amount tag — the invoice is authoritative", () => {
+    // NIP-57 makes the 9734 amount optional; equality is only enforced when
+    // both exist. Wallets that omit it must still count.
+    const parsed = parseZapReceipt(
+      zapReceipt({ request: zapRequest({ amount: null }) }),
+      ALICE_PK,
+    );
+    expect(parsed?.amountMsat).toBe(AMOUNT_MSAT); // from the bolt11 HRP
   });
 
   it("rejects non-9735 kinds outright", () => {

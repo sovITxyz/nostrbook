@@ -198,20 +198,17 @@ export function parseZapReceipt(
   if (firstTag(reqTags, "p") !== authorPubkey) return null;
   if (firstTag(reqTags, "a") !== address) return null;
 
-  const amountStr = firstTag(reqTags, "amount");
-  if (amountStr === undefined || !/^\d{1,15}$/.test(amountStr)) return null;
-  const amountMsat = Number(amountStr);
-  if (
-    !Number.isSafeInteger(amountMsat) ||
-    amountMsat <= 0 ||
-    amountMsat > MAX_ZAP_MSAT
-  ) {
-    return null;
-  }
-
-  // NIP-57 appendix: the invoice amount must equal the request amount.
+  // The invoice is the authoritative amount source (it is what was paid).
+  // NIP-57 makes the 9734 `amount` tag optional; when present it must equal
+  // the invoice amount (appendix rule) — wallets that omit it still count.
   const invoiceMsat = bolt11Msat(firstTag(ev.tags, "bolt11"));
-  if (invoiceMsat === null || invoiceMsat !== amountMsat) return null;
+  if (invoiceMsat === null) return null;
+  const amountStr = firstTag(reqTags, "amount");
+  if (amountStr !== undefined) {
+    if (!/^\d{1,15}$/.test(amountStr)) return null;
+    if (Number(amountStr) !== invoiceMsat) return null;
+  }
+  const amountMsat = invoiceMsat;
 
   return {
     receiptId: ev.id,
@@ -442,9 +439,23 @@ async function postExists(
  * Zap ingestion for one user (called from the cron loop after the post
  * refresh). Skips users without a shape-valid lud16 or a resolvable
  * nostrPubkey — without the wallet key there is nothing to bind receipts to.
- * Watermark advances only over processed receipts, and only persists when
- * the relay window closed (batch below the fetch limit) — mirroring the
- * refresh pass's no-silent-skips rule without its paging.
+ *
+ * Watermark rules (same contract as cron/refresh.ts — every one closes a
+ * suppression hole, because the `#p` filter is satisfiable by ANYONE):
+ *   - only VERIFIED receipts advance it: stored rows and stored-dedup hits.
+ *     Junk from other pubkeys, parse-failures, and signature failures never
+ *     do — the `pubkey` field is attacker-claimable without a valid sig, so
+ *     advancing over anything unverified would let one far-future spam
+ *     event per run permanently outrun every real receipt. The cost is
+ *     refetching bounded junk each run (one page, no crypto spent on it);
+ *   - a verified receipt DEFERRED because its post is not mirrored yet
+ *     holds the watermark below itself, so it still counts once the post
+ *     lands via refresh — a later stored receipt must not advance past it;
+ *   - far-future created_at values are skipped entirely (clock skew /
+ *     forgery) and clamp the persisted value;
+ *   - it persists only over a CLOSED relay window (batch below the fetch
+ *     limit): NIP-01 `limit` keeps the newest matches, so a full page may
+ *     have silently dropped older receipts.
  */
 export async function refreshZapsForUser(
   env: Env,
@@ -474,19 +485,10 @@ export async function refreshZapsForUser(
   const windowClosed = batch.length < ZAP_FETCH_LIMIT;
 
   // Cheap pre-filters before any crypto: right kind, right wallet key.
+  // (Non-candidates are unverified junk — they NEVER touch the watermark.)
   const candidates = batch
     .filter((ev) => ev.kind === 9735 && ev.pubkey === nostrPubkey)
     .sort((a, b) => a.created_at - b.created_at || (a.id < b.id ? -1 : 1));
-  if (candidates.length === 0) {
-    if (windowClosed && batch.length > 0) {
-      const newest = Math.max(...batch.map((ev) => ev.created_at));
-      const maxPlausible =
-        Math.floor(Date.now() / 1000) + ZAP_MAX_FUTURE_SKEW_SECONDS;
-      const next = Math.min(newest, maxPlausible);
-      if (next > since) await writeZapSince(env, user.pubkey, next);
-    }
-    return;
-  }
 
   const stored = await storedZapIds(
     env,
@@ -497,30 +499,40 @@ export async function refreshZapsForUser(
 
   let credits = ZAP_VERIFY_CAP;
   let watermark = since;
+  // Oldest skipped-but-still-storable receipt: the persisted watermark must
+  // stay BELOW it (deferred post-not-mirrored receipts, cap-out remainder).
+  let holdBefore: number | null = null;
   let storedAny = false;
-  let cappedOut = false;
   for (const ev of candidates) {
     if (ev.created_at > maxPlausible) continue; // forged/skewed — never advance
     if (stored.has(ev.id)) {
+      // Verified when it was stored — safe to advance past it.
       if (ev.created_at > watermark) watermark = ev.created_at;
       continue;
     }
     const parsed = parseZapReceipt(ev, user.pubkey);
-    if (parsed === null) {
-      // Structurally invalid for this author — safe to advance past (it can
-      // never become countable) without spending a verification credit.
-      if (ev.created_at > watermark) watermark = ev.created_at;
-      continue;
-    }
+    // Structurally uncountable — but UNVERIFIED (the pubkey field costs an
+    // attacker nothing), so it must not advance the watermark either. It is
+    // refetched next run and re-fails the same cheap parse; no crypto spent.
+    if (parsed === null) continue;
     if (credits === 0) {
-      cappedOut = true;
-      break; // resume from `watermark` next tick
+      // Candidates are oldest-first, so this is the oldest unprocessed one —
+      // but an even older DEFERRED receipt may already hold the watermark
+      // lower; keep the minimum. Resume next tick.
+      if (holdBefore === null || ev.created_at < holdBefore) {
+        holdBefore = ev.created_at;
+      }
+      break;
     }
     credits--;
     if (!(await verifyEvent(ev))) continue; // forged — never advance
     if (!(await postExists(env, user.pubkey, parsed.dTag))) {
-      // Valid receipt for a post we do not mirror (yet) — skip WITHOUT
-      // advancing, so it counts once the post lands via refresh.
+      // Valid receipt for a post we do not mirror (yet): defer — hold the
+      // watermark below it so it still counts once the post lands, even
+      // when a NEWER receipt is stored later in this same loop.
+      if (holdBefore === null || ev.created_at < holdBefore) {
+        holdBefore = ev.created_at;
+      }
       continue;
     }
     await storeZapReceipt(env, parsed);
@@ -530,10 +542,11 @@ export async function refreshZapsForUser(
 
   if (storedAny) await bumpGen(env, user.pubkey);
 
+  if (holdBefore !== null) watermark = Math.min(watermark, holdBefore - 1);
   watermark = Math.min(watermark, maxPlausible);
-  // Persist only over a closed window (nothing truncated) unless we capped
-  // out mid-batch — then the watermark is a true resume point regardless.
-  if ((windowClosed || cappedOut) && watermark !== since) {
+  // Persist only over a closed window: a full page may have truncated older
+  // receipts the `since` filter would then skip forever.
+  if (windowClosed && watermark > since) {
     await writeZapSince(env, user.pubkey, watermark);
   }
 }

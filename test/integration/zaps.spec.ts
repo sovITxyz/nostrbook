@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { finalizeEvent } from "nostr-tools/pure";
 import { hexToBytes } from "@noble/hashes/utils.js";
 import fixtures from "../fixtures/events.json";
+import keys from "../fixtures/keys.json";
 import {
   ALICE_PK,
   BOB_SK,
@@ -185,12 +186,72 @@ describe("refreshZapsForUser", () => {
     expect(lnurlCalls).toBe(1);
   });
 
-  it("skips receipts for posts that are not mirrored", async () => {
+  it("skips receipts for posts that are not mirrored WITHOUT advancing the watermark", async () => {
     await seedProfileAndPost();
     setLnurlFetcherForTests(async () => MALLORY_PK);
     serveEvents([zapReceipt({ address: `30023:${ALICE_PK}:not-mirrored` })]);
     await refreshZapsForUser(env, ["wss://mock.local"], await aliceUser());
     expect(await zapTotals(env, `30023:${ALICE_PK}:not-mirrored`)).toBeNull();
+    // Deferred, not dropped: the receipt must count once the post lands.
+    expect(readZapSince((await aliceUser()).settings)).toBe(0);
+  });
+
+  it("junk from other pubkeys NEVER advances the watermark (suppression guard)", async () => {
+    // One spam 9735 per run with a near-future created_at would otherwise
+    // outrun every real receipt forever (the #p filter is attacker-satisfiable).
+    await seedProfileAndPost();
+    setLnurlFetcherForTests(async () => MALLORY_PK);
+    serveEvents([
+      zapReceipt({ sk: BOB_SK, created_at: Math.floor(Date.now() / 1000) + 800 }),
+    ]);
+    await refreshZapsForUser(env, ["wss://mock.local"], await aliceUser());
+    expect(readZapSince((await aliceUser()).settings)).toBe(0);
+  });
+
+  it("a deferred receipt holds the watermark below itself past newer stored ones", async () => {
+    await seedProfileAndPost();
+    setLnurlFetcherForTests(async () => MALLORY_PK);
+    const deferred = zapReceipt({
+      address: `30023:${ALICE_PK}:landing-later`,
+      created_at: 1_700_050_005,
+    });
+    const newerStored = zapReceipt({ created_at: 1_700_050_020 });
+    serveEvents([deferred, newerStored]);
+
+    await refreshZapsForUser(env, ["wss://mock.local"], await aliceUser());
+    // The newer receipt stored, but the watermark stayed below the deferred
+    // one so it is refetched next run.
+    expect(await zapTotals(env, ADDRESS)).toEqual({
+      msatTotal: AMOUNT_MSAT,
+      zapCount: 1,
+    });
+    expect(readZapSince((await aliceUser()).settings)).toBe(
+      deferred.created_at - 1,
+    );
+
+    // The post lands via refresh; the next zap run counts the deferred receipt.
+    const post = finalizeEvent(
+      {
+        kind: 30023,
+        created_at: 1_700_000_300,
+        tags: [
+          ["d", "landing-later"],
+          ["title", "Landing later"],
+          ["published_at", "1700000300"],
+        ],
+        content: "hello",
+      },
+      hexToBytes(keys.alice.sk),
+    ) as NostrEvent;
+    expect(await mirrorEvent(env, post)).toBe("stored");
+    await refreshZapsForUser(env, ["wss://mock.local"], await aliceUser());
+    expect(await zapTotals(env, `30023:${ALICE_PK}:landing-later`)).toEqual({
+      msatTotal: AMOUNT_MSAT,
+      zapCount: 1,
+    });
+    expect(readZapSince((await aliceUser()).settings)).toBe(
+      newerStored.created_at,
+    );
   });
 
   it("does nothing for a user without a valid lud16", async () => {
