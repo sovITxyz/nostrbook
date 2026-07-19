@@ -140,6 +140,14 @@ export function DashboardPage(props: {
           )}
         </section>
 
+        <section class="dashboard-profile">
+          <h2>Your profile</h2>
+          <p>
+            Name, avatar, bio, lightning address — your public Nostr profile
+            (kind 0). <a href="/dashboard/profile">Edit profile</a>
+          </p>
+        </section>
+
         <section class="dashboard-settings">
           <h2>Blog settings</h2>
           <form method="post" action="/dashboard/settings">

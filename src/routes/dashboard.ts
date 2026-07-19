@@ -13,6 +13,7 @@ import {
 } from "../services/users";
 import { rateLimitAllows } from "../services/ratelimit";
 import { getPost, listPostsByPubkey, rowToEvent } from "../services/events";
+import { getProfile, storedProfileContent } from "../services/profiles";
 import { bumpGen } from "../services/mirror";
 import { renderPost } from "../markdown";
 import { sanitizeCss, MAX_THEME_CSS_LENGTH } from "../markdown/css-sanitize";
@@ -21,6 +22,7 @@ import { relayList } from "../cron/refresh";
 import { selfRelayUrl } from "../relay/url";
 import { DashboardPage, type DashboardPost } from "../views/main/dashboard";
 import { EditorPage } from "../views/main/editor";
+import { ProfilePage } from "../views/main/profile";
 
 /**
  * Dashboard (apex only, session required): handle claim (P4), the signed-in
@@ -397,6 +399,35 @@ dashboardRoutes.post("/settings", async (c) => {
     await bumpGen(c.env, sess.pubkey);
   }
   return c.redirect("/dashboard?saved=1", 303);
+});
+
+// --- GET /dashboard/profile — kind 0 profile editor (#11) -----------------------
+// Prefill comes from the stored profiles row: profileContentFields parses the
+// raw kind 0 event so the fields WITHOUT a dedicated column (display_name,
+// banner, website, lud06) round-trip too. prevCreatedAt is the stored event's
+// created_at — the client must strictly exceed it to win the replaceable
+// (pubkey, 0, '') slot, exactly like the post editor. Signing + publishing is
+// entirely client-side (public/js/profile.js → /api/mirror + relay broadcast).
+dashboardRoutes.get("/profile", async (c) => {
+  const sess = c.var.session;
+  if (!sess) return c.redirect("/login", 302);
+  const user = await getUserByPubkey(c.env, sess.pubkey);
+  const profile = await getProfile(c.env, sess.pubkey);
+  const settings = readBlogSettings(user?.settings ?? "{}");
+  const { fields, extra } = storedProfileContent(profile?.raw ?? "");
+  return c.html(
+    ProfilePage({
+      pubkey: sess.pubkey,
+      handle: user?.handle ?? null,
+      mainHost: c.env.MAIN_HOST.toLowerCase(),
+      fields,
+      extra,
+      prevCreatedAt: profile?.updated_at ?? null,
+      relays: editorRelays(c.env, user),
+      settingsAboutSet: settings.about.trim() !== "",
+      published: c.req.query("published") === "1",
+    }),
+  );
 });
 
 // --- Editor pages ----------------------------------------------------------------

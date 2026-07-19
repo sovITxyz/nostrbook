@@ -189,6 +189,53 @@ export function signPostEvent(opts: {
 }
 
 /**
+ * Sign a kind 0 profile with a committed fixture key. `content` may be the
+ * metadata object (stringified here, like public/js/profile.js does) or a
+ * raw string for malformed-content tests.
+ */
+export function signProfileEvent(opts: {
+  sk?: string;
+  content: string | Record<string, unknown>;
+  created_at: number;
+  tags?: string[][];
+}): NostrEvent {
+  return finalizeEvent(
+    {
+      kind: 0,
+      created_at: opts.created_at,
+      tags: opts.tags ?? [],
+      content:
+        typeof opts.content === "string"
+          ? opts.content
+          : JSON.stringify(opts.content),
+    },
+    hexToBytes(opts.sk ?? ALICE_SK),
+  ) as NostrEvent;
+}
+
+/**
+ * Sign an event of an arbitrary kind with a fixture key — rejection-path
+ * tests (kinds the mirror/relay must refuse) build their probes with this.
+ */
+export function signRawEvent(opts: {
+  sk?: string;
+  kind: number;
+  created_at: number;
+  tags?: string[][];
+  content?: string;
+}): NostrEvent {
+  return finalizeEvent(
+    {
+      kind: opts.kind,
+      created_at: opts.created_at,
+      tags: opts.tags ?? [],
+      content: opts.content ?? "",
+    },
+    hexToBytes(opts.sk ?? ALICE_SK),
+  ) as NostrEvent;
+}
+
+/**
  * Sign a kind 5 delete with a committed fixture key. Mirrors editor.js:
  * e-tag the stored event id, a-tag the replaceable address.
  */

@@ -16,6 +16,7 @@ import {
   sessionCookieFor,
   signDeleteEvent,
   signPostEvent,
+  signRawEvent,
   findXssVectors,
 } from "../helpers";
 import type { NostrEvent } from "../../src/nostr/event";
@@ -110,10 +111,22 @@ describe("POST /api/mirror — auth gates", () => {
     expect(row).toBeNull();
   });
 
-  it("rejects kinds other than 30023 and 5 (400)", async () => {
+  it("rejects kinds other than 30023, 5, and 0 (400)", async () => {
+    const cookie = await sessionCookieFor(ALICE_PK);
+    const note = signRawEvent({
+      kind: 1,
+      created_at: 1_700_000_500,
+      content: "a short text note",
+    });
+    const res = await postMirror(note, { Cookie: cookie });
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a kind 0 profile for the OWN pubkey (#11)", async () => {
     const cookie = await sessionCookieFor(ALICE_PK);
     const res = await postMirror(aliceProfile, { Cookie: cookie });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ result: "stored" });
   });
 
   it("rejects non-event JSON (400)", async () => {

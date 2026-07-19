@@ -105,11 +105,18 @@ apiRoutes.post("/mirror", async (c) => {
     return c.json({ error: "event pubkey does not match the signed-in key" }, 403);
   }
 
-  // Only long-form posts and deletes flow through the editor; profiles and
-  // everything else arrive via the relay sync paths (cron refresh).
-  if (ev.kind !== 30023 && ev.kind !== 5) {
+  // Long-form posts and deletes flow through the editor; kind 0 through the
+  // dashboard profile form (#11) — mirrorEvent already routes it to
+  // upsertProfile. Everything else arrives via the relay sync paths (cron
+  // refresh). The MAX_POSTS_PER_PUBKEY cap below is 30023-only by design:
+  // kind 0 occupies a single replaceable (pubkey, 0, '') slot, so it cannot
+  // grow storage per save.
+  if (ev.kind !== 30023 && ev.kind !== 5 && ev.kind !== 0) {
     return c.json(
-      { error: "only kind 30023 (post) and kind 5 (delete) are accepted" },
+      {
+        error:
+          "only kind 30023 (post), kind 5 (delete), and kind 0 (profile) are accepted",
+      },
       400,
     );
   }
